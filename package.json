@@ -1,0 +1,39 @@
+{
+  "name": "edusync-secure",
+  "version": "1.0.0",
+  "description": "EduSync - Educational platform with wallet and marketplace functionality",
+  "main": "backend/server.js",
+  "scripts": {
+    "start": "node backend/server.js",
+    "dev": "concurrently \"npm run server\" \"npm run client\"",
+    "server": "cd backend && npm start",
+    "client": "cd client && npm run dev",
+    "build": "cd backend && npm install && cd ../client && npm install && npm run build",
+    "install-deps": "cd backend && npm install && cd ../client && npm install",
+    "heroku-postbuild": "cd backend && npm install && cd ../client && npm install && npm run build"
+  },
+  "keywords": [
+    "education",
+    "marketplace",
+    "wallet",
+    "react",
+    "nodejs",
+    "postgresql"
+  ],
+  "author": "ahnafwolfy007",
+  "license": "MIT",
+  "engines": {
+    "node": ">=14.0.0",
+    "npm": ">=6.0.0"
+  },
+  "dependencies": {
+    "concurrently": "^8.2.0"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ahnafwolfy007/edusync_security.git"
+  }
+}

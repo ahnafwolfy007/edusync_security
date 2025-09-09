@@ -1,0 +1,32 @@
+services:
+  # Backend API Server
+  - type: web
+    name: edusync-backend
+    env: node
+    buildCommand: cd backend && npm install
+    startCommand: cd backend && npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+    # Add your environment variables here:
+    # - key: DATABASE_URL
+    #   fromDatabase:
+    #     name: edusync-db
+    #     property: connectionString
+    # - key: JWT_SECRET
+    #   generateValue: true
+
+  # Frontend Static Site  
+  - type: web
+    name: edusync-frontend
+    env: static
+    buildCommand: cd client && npm install && npm run build
+    staticPublishPath: ./client/dist
+    
+# Optional: PostgreSQL Database
+# databases:
+#   - name: edusync-db
+#     databaseName: edusync
+#     user: edusync_user
