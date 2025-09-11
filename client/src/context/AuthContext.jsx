@@ -36,35 +36,32 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   const login = async (email, password) => {
-    try {
-      const response = await api.post('/auth/login', { email, password });
-      
-      if (response.data.success) {
-        const { user: userData, accessToken, refreshToken } = response.data.data;
-        
-        // Store tokens and user data
-        localStorage.setItem('accessToken', accessToken);
-        localStorage.setItem('refreshToken', refreshToken);
-        localStorage.setItem('userData', JSON.stringify(userData));
-        localStorage.setItem('userRole', userData.role_name);
-        
-        // Set default authorization header
-        api.defaults.headers.common['Authorization'] = `Bearer ${accessToken}`;
-        
-        setUser(userData);
-        setIsAuthenticated(true);
-        
-        return { success: true, user: userData };
-      }
-      
-      return { success: false, message: response.data.message };
-    } catch (error) {
-      console.error('Login error:', error);
-      return { 
-        success: false, 
-        message: error.response?.data?.message || 'Login failed' 
-      };
+    const response = await api.post('/auth/login', { email, password });
+    if (!response?.data?.success) {
+      const msg = response?.data?.message || 'Login failed';
+      return { success: false, message: msg };
     }
+
+    const { user: userData, accessToken, refreshToken } = response.data.data;
+
+    // Store tokens and user data
+    localStorage.setItem('accessToken', accessToken);
+    localStorage.setItem('refreshToken', refreshToken);
+    localStorage.setItem('userData', JSON.stringify(userData));
+    localStorage.setItem('userRole', userData.role_name || userData.role);
+
+    // Set default authorization header
+    api.defaults.headers.common['Authorization'] = `Bearer ${accessToken}`;
+
+    const normalized = { 
+      ...userData, 
+      name: userData.full_name || userData.fullName || userData.name, 
+      avatar: userData.profile_picture || userData.avatar 
+    };
+    setUser(normalized);
+    setIsAuthenticated(true);
+
+    return { success: true, user: userData };
   };
 
   const register = async (userData) => {
@@ -77,7 +74,9 @@ export const AuthProvider = ({ children }) => {
         phone: userData.phone,
         institution: userData.university || userData.institution,
         location: userData.location,
-        role: userData.role || 'student'
+  role: userData.role || 'student',
+  // Pass through OTP code (required by backend register endpoint)
+  otpCode: userData.otpCode
       };
 
       console.log('Sending registration data:', mappedUserData);
@@ -96,7 +95,12 @@ export const AuthProvider = ({ children }) => {
         // Set default authorization header
         api.defaults.headers.common['Authorization'] = `Bearer ${accessToken}`;
         
-        setUser(newUser);
+        const normalizedNew = { 
+          ...newUser, 
+          name: newUser.full_name || newUser.fullName || newUser.name,
+          avatar: newUser.profile_picture || newUser.avatar
+        };
+        setUser(normalizedNew);
         setIsAuthenticated(true);
         
         return { success: true, user: newUser };
@@ -130,9 +134,14 @@ export const AuthProvider = ({ children }) => {
   };
 
   const updateUser = (updatedUserData) => {
-    const newUserData = { ...user, ...updatedUserData };
-    setUser(newUserData);
-    localStorage.setItem('userData', JSON.stringify(newUserData));
+    const merged = { ...user, ...updatedUserData };
+    const normalized = {
+      ...merged,
+      name: merged.full_name || merged.fullName || merged.name,
+      avatar: merged.profile_picture || merged.avatar
+    };
+    setUser(normalized);
+    localStorage.setItem('userData', JSON.stringify(normalized));
   };
 
   const refreshToken = async () => {

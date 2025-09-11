@@ -81,6 +81,21 @@ export const NotificationProvider = ({ children }) => {
     });
   }, [addNotification]);
 
+  // Backward-compatible alias used across pages: showNotification(message, type)
+  const showNotification = useCallback((message, type = 'info', options = {}) => {
+    switch (type) {
+      case 'success':
+        return showSuccess(message, options);
+      case 'error':
+        return showError(message, options);
+      case 'warning':
+        return showWarning(message, options);
+      case 'info':
+      default:
+        return showInfo(message, options);
+    }
+  }, [showSuccess, showError, showWarning, showInfo]);
+
   const value = {
     notifications,
     addNotification,
@@ -89,7 +104,8 @@ export const NotificationProvider = ({ children }) => {
     showSuccess,
     showError,
     showWarning,
-    showInfo
+  showInfo,
+  showNotification
   };
 
   return (

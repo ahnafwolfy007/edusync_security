@@ -62,7 +62,7 @@ api.interceptors.response.use(
         localStorage.removeItem('userData');
         localStorage.removeItem('userRole');
         
-        window.location.href = '/auth';
+  window.location.href = '/login';
       }
     }
 
@@ -107,15 +107,19 @@ export const apiHelpers = {
 
   // User management
   user: {
-    getProfile: () => api.get('/user/profile'),
-    updateProfile: (data) => api.put('/user/profile', data),
-    updateProfilePicture: (formData) => api.put('/user/profile-picture', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' }
-    }),
-    getListings: (type) => api.get('/user/listings', { params: { type } }),
-    getOrders: (type) => api.get('/user/orders', { params: { type } }),
-    getStats: () => api.get('/user/stats'),
-    deleteAccount: (password) => api.delete('/user/account', { data: { password } }),
+    getProfile: () => api.get('/users/profile'),
+    updateProfile: (data) => api.put('/users/profile', data),
+    updateProfilePicture: (file) => {
+      const formData = new FormData();
+      formData.append('profilePicture', file);
+      return api.put('/users/profile-picture', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+    },
+    getListings: (type) => api.get('/users/listings', { params: { type } }),
+    getOrders: (type) => api.get('/users/orders', { params: { type } }),
+    getStats: () => api.get('/users/stats'),
+    deleteAccount: (password) => api.delete('/users/account', { data: { password } }),
   },
 
   // Business management

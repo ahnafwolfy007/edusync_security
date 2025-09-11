@@ -8,7 +8,7 @@ const Login = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { login } = useAuth();
-  const { showNotification } = useNotification();
+  const { showSuccess, showError } = useNotification();
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [formData, setFormData] = useState({
@@ -23,21 +23,22 @@ const Login = () => {
     e.preventDefault();
     
     if (!formData.email || !formData.password) {
-      showNotification('Please fill in all fields', 'error');
+      showError('Please fill in all fields');
       return;
     }
 
     setLoading(true);
     try {
-      await login(formData.email, formData.password, formData.rememberMe);
-      showNotification('Welcome back!', 'success');
-      navigate(from, { replace: true });
+      const result = await login(formData.email, formData.password, formData.rememberMe);
+      if (result?.success) {
+        showSuccess('Welcome back!');
+        navigate(from, { replace: true });
+      } else {
+        showError(result?.message || 'Invalid email or password');
+      }
     } catch (error) {
       console.error('Login error:', error);
-      showNotification(
-        error.response?.data?.message || 'Login failed. Please try again.',
-        'error'
-      );
+      showError(error.response?.data?.message || 'Login failed. Please try again.');
     } finally {
       setLoading(false);
     }

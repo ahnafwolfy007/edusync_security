@@ -27,6 +27,13 @@ const walletRoutes = require('./routes/walletRoutes');
 const adminRoutes = require('./routes/adminRoutes');
 const lostFoundRoutes = require('./routes/lostFoundRoutes');
 const noticeRoutes = require('./routes/noticeRoutes');
+const notificationRoutes = require('./routes/notificationRoutes');
+const accommodationRoutes = require('./routes/accommodationRoutes');
+const freeMarketplaceRoutes = require('./routes/freeMarketplaceRoutes');
+const foodVendorRoutes = require('./routes/foodVendorRoutes');
+const foodOrderRoutes = require('./routes/foodOrderRoutes');
+const businessMarketplaceRoutes = require('./routes/businessMarketplaceRoutes');
+const chatRoutes = require('./routes/chatRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -57,7 +64,7 @@ app.use('/api/', limiter);
 
 // CORS configuration
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+  origin: process.env.FRONTEND_URL ? [process.env.FRONTEND_URL] : ['http://localhost:5173', 'http://localhost:5174'],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
@@ -107,6 +114,13 @@ app.use('/api/wallet', walletRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/lost-found', lostFoundRoutes);
 app.use('/api/notices', noticeRoutes);
+app.use('/api/notifications', notificationRoutes);
+app.use('/api/accommodation', accommodationRoutes);
+app.use('/api/free-marketplace', freeMarketplaceRoutes);
+app.use('/api/food-vendors', foodVendorRoutes);
+app.use('/api/food-orders', foodOrderRoutes);
+app.use('/api/business-marketplace', businessMarketplaceRoutes);
+app.use('/api/chats', chatRoutes);
 
 // API documentation endpoint
 app.get('/api', (req, res) => {
@@ -128,7 +142,13 @@ app.get('/api', (req, res) => {
       wallet: '/api/wallet',
       admin: '/api/admin',
       lostFound: '/api/lost-found',
-      notices: '/api/notices'
+      notices: '/api/notices',
+      accommodation: '/api/accommodation',
+      freeMarketplace: '/api/free-marketplace',
+      foodVendors: '/api/food-vendors',
+      foodOrders: '/api/food-orders',
+      businessMarketplace: '/api/business-marketplace'
+  ,chats: '/api/chats'
     }
   });
 });
@@ -186,11 +206,16 @@ app.use('*', (req, res) => {
 // Initialize database and start server
 async function startServer() {
   try {
-    // Initialize database
-    await dbConfig.init();
-    console.log('✅ Database initialized successfully');
+    // Try to initialize database
+    try {
+      await dbConfig.init();
+      console.log('✅ Database initialized successfully');
+    } catch (dbError) {
+      console.log('⚠️ Database connection failed, running in offline mode');
+      console.log('Database error:', dbError.message);
+    }
     
-    // Start server
+    // Start server regardless of database status
     app.listen(PORT, () => {
       console.log(`🚀 EduSync Backend Server running on port ${PORT}`);
       console.log(`📱 Environment: ${process.env.NODE_ENV || 'development'}`);
@@ -223,12 +248,18 @@ process.on('SIGINT', async () => {
 // Handle uncaught exceptions
 process.on('uncaughtException', (err) => {
   console.error('Uncaught Exception:', err);
-  process.exit(1);
+  // Don't exit in development mode for database errors
+  if (process.env.NODE_ENV !== 'development' || !err.message.includes('database') || !err.message.includes('password authentication')) {
+    process.exit(1);
+  }
 });
 
 process.on('unhandledRejection', (reason, promise) => {
   console.error('Unhandled Rejection at:', promise, 'reason:', reason);
-  process.exit(1);
+  // Don't exit in development mode for database errors
+  if (process.env.NODE_ENV !== 'development' || !reason.message.includes('database') || !reason.message.includes('password authentication')) {
+    process.exit(1);
+  }
 });
 
 // Start the server

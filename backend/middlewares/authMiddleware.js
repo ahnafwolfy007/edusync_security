@@ -94,7 +94,11 @@ const optionalAuthMiddleware = async (req, res, next) => {
   }
 };
 
+// Provide alias names for consistency with other route files expecting authenticateToken
+const authenticateToken = authMiddleware;
+
 module.exports = {
   authMiddleware,
+  authenticateToken,
   optionalAuthMiddleware
 };

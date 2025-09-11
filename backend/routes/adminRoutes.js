@@ -1,43 +1,42 @@
 const express = require('express');
 const router = express.Router();
-const {
-  getAllUsers,
-  getUserById,
-  updateUser,
-  deleteUser,
-  getSystemStats,
-  getAllBusinesses,
-  approveBusiness,
-  rejectBusiness,
-  getAllPayments,
-  getAllTransactions,
-  generateReport
-} = require('../controllers/adminController');
+const adminController = require('../controllers/adminController');
 const { authenticateToken, requireAdmin } = require('../middlewares/auth');
 
 // All routes require admin authentication
 router.use(authenticateToken);
 router.use(requireAdmin);
 
-// User management
-router.get('/users', getAllUsers);
-router.get('/users/:id', getUserById);
-router.put('/users/:id', updateUser);
-router.delete('/users/:id', deleteUser);
+// Dashboard and statistics
+router.get('/dashboard/stats', adminController.getDashboardStats);
+router.get('/stats', adminController.getSystemStats); // Alias for compatibility
 
-// Business management
-router.get('/businesses', getAllBusinesses);
-router.post('/businesses/:id/approve', approveBusiness);
-router.post('/businesses/:id/reject', rejectBusiness);
+// User management
+router.get('/users', adminController.getAllUsers);
+router.get('/users/:id', adminController.getUserById);
+router.put('/users/:id', adminController.updateUser);
+router.delete('/users/:id', adminController.deleteUser);
+
+// Business verification
+router.get('/business-applications/pending', adminController.getPendingBusinessApplications);
+router.put('/business-applications/:applicationId/verify', adminController.verifyBusinessApplication);
+router.get('/businesses', adminController.getAllBusinesses);
+router.post('/businesses/:id/approve', adminController.approveBusiness); // Legacy
+router.post('/businesses/:id/reject', adminController.rejectBusiness); // Legacy
+
+// Food vendor verification
+router.get('/food-vendors/pending', adminController.getPendingFoodVendors);
+router.put('/food-vendors/:vendorId/verify', adminController.verifyFoodVendor);
+
+// Notice management
+router.post('/notices', adminController.manageNotice);
+router.put('/notices/:noticeId', adminController.manageNotice);
 
 // Financial management
-router.get('/payments', getAllPayments);
-router.get('/transactions', getAllTransactions);
-
-// System statistics
-router.get('/stats', getSystemStats);
+router.get('/payments', adminController.getAllPayments);
+router.get('/transactions', adminController.getAllTransactions);
 
 // Generate reports
-router.get('/reports/:type', generateReport);
+router.get('/reports/:type', adminController.generateReport);
 
 module.exports = router;

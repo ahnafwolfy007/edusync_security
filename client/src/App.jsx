@@ -3,6 +3,8 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { WalletProvider } from './context/WalletContext';
 import { NotificationProvider } from './context/NotificationContext';
+import { CartProvider } from './context/CartContext';
+import ErrorBoundary from './components/common/ErrorBoundary';
 
 // Import layout components
 import Navigation from './components/layout/Navigation';
@@ -12,7 +14,19 @@ import Login from './pages/Login';
 import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
 import BusinessMarketplace from './pages/BusinessMarketplace';
+import BusinessShopDetails from './pages/BusinessShopDetails';
 import SecondhandMarket from './pages/SecondhandMarket';
+import Marketplace from './pages/Marketplace';
+import AccommodationMarket from './pages/AccommodationMarket';
+import FreeMarketplace from './pages/FreeMarketplace';
+// Detail pages (to be created if not existing yet)
+import SecondhandItemDetails from './pages/SecondhandItemDetails';
+import FreeItemDetails from './pages/FreeItemDetails';
+import FoodOrdering from './pages/FoodOrdering';
+import OrderHistory from './pages/OrderHistory';
+import Notifications from './pages/Notifications';
+import AdminPanel from './pages/AdminPanel';
+import Cart from './pages/Cart';
 import Wallet from './pages/Wallet';
 import Profile from './pages/Profile';
 
@@ -89,67 +103,136 @@ const PublicRoute = ({ children }) => {
 
 function App() {
   return (
-    <AuthProvider>
-      <WalletProvider>
-        <NotificationProvider>
-          <Router>
-            <div className="min-h-screen bg-gray-50">
-              <Routes>
-                {/* Public Routes */}
-                <Route path="/login" element={
-                  <PublicRoute>
-                    <Login />
-                  </PublicRoute>
-                } />
-                
-                <Route path="/register" element={
-                  <PublicRoute>
-                    <Register />
-                  </PublicRoute>
-                } />
-                
-                {/* Protected Routes */}
-                <Route path="/dashboard" element={
-                  <ProtectedRoute>
-                    <Dashboard />
-                  </ProtectedRoute>
-                } />
-                
-                <Route path="/business-marketplace" element={
-                  <ProtectedRoute>
-                    <BusinessMarketplace />
-                  </ProtectedRoute>
-                } />
-                
-                <Route path="/secondhand-market" element={
-                  <ProtectedRoute>
-                    <SecondhandMarket />
-                  </ProtectedRoute>
-                } />
-                
-                <Route path="/wallet" element={
-                  <ProtectedRoute>
-                    <Wallet />
-                  </ProtectedRoute>
-                } />
-                
-                <Route path="/profile" element={
-                  <ProtectedRoute>
-                    <Profile />
-                  </ProtectedRoute>
-                } />
-                
-                {/* Default redirect */}
-                <Route path="/" element={<Navigate to="/dashboard" replace />} />
-                
-                {/* Catch all route */}
-                <Route path="*" element={<Navigate to="/dashboard" replace />} />
-              </Routes>
-            </div>
-          </Router>
-        </NotificationProvider>
-      </WalletProvider>
-    </AuthProvider>
+    <ErrorBoundary>
+      <AuthProvider>
+        <WalletProvider>
+          <NotificationProvider>
+            <CartProvider>
+              <Router>
+                <div className="min-h-screen bg-gray-50">
+                  <Routes>
+                  {/* Public Routes */}
+                  <Route path="/login" element={
+                    <PublicRoute>
+                      <Login />
+                    </PublicRoute>
+                  } />
+                  
+                  <Route path="/register" element={
+                    <PublicRoute>
+                      <Register />
+                    </PublicRoute>
+                  } />
+                  
+                  {/* Protected Routes */}
+                  <Route path="/dashboard" element={
+                    <ProtectedRoute>
+                      <Dashboard />
+                    </ProtectedRoute>
+                  } />
+                  
+                  <Route path="/business-marketplace" element={
+                    <ProtectedRoute>
+                      <BusinessMarketplace />
+                    </ProtectedRoute>
+                  } />
+                  
+                  <Route path="/business-marketplace/shops/:businessId" element={
+                    <ProtectedRoute>
+                      <BusinessShopDetails />
+                    </ProtectedRoute>
+                  } />
+                  
+                  <Route path="/secondhand-market" element={
+                    <ProtectedRoute>
+                      <SecondhandMarket />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="/product/:itemId" element={
+                    <ProtectedRoute>
+                      <SecondhandItemDetails />
+                    </ProtectedRoute>
+                  } />
+                  
+                  <Route path="/marketplace" element={
+                    <ProtectedRoute>
+                      <Marketplace />
+                    </ProtectedRoute>
+                  } />
+                  
+                  <Route path="/accommodation-market" element={
+                    <ProtectedRoute>
+                      <AccommodationMarket />
+                    </ProtectedRoute>
+                  } />
+                  
+                  <Route path="/free-marketplace" element={
+                    <ProtectedRoute>
+                      <FreeMarketplace />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="/free-marketplace/:itemId" element={
+                    <ProtectedRoute>
+                      <FreeItemDetails />
+                    </ProtectedRoute>
+                  } />
+                  
+                  <Route path="/food-ordering" element={
+                    <ProtectedRoute>
+                      <FoodOrdering />
+                    </ProtectedRoute>
+                  } />
+                  
+                  <Route path="/orders" element={
+                    <ProtectedRoute>
+                      <OrderHistory />
+                    </ProtectedRoute>
+                  } />
+                  
+                  <Route path="/notifications" element={
+                    <ProtectedRoute>
+                      <Notifications />
+                    </ProtectedRoute>
+                  } />
+                  
+                  <Route path="/cart" element={
+                    <ProtectedRoute>
+                      <Cart />
+                    </ProtectedRoute>
+                  } />
+                  
+                  <Route path="/wallet" element={
+                    <ProtectedRoute>
+                      <Wallet />
+                    </ProtectedRoute>
+                  } />
+                  
+                  <Route path="/profile" element={
+                    <ProtectedRoute>
+                      <Profile />
+                    </ProtectedRoute>
+                  } />
+                  
+                  {/* Admin Routes */}
+                  <Route path="/admin" element={
+                    <AdminRoute>
+                      <AdminPanel />
+                    </AdminRoute>
+                  } />
+                  
+                  {/* Default redirect */}
+                  <Route path="/" element={<Navigate to="/dashboard" replace />} />
+                  
+                  {/* Catch all route */}
+                  <Route path="*" element={<Navigate to="/dashboard" replace />} />
+                  </Routes>
+                </div>
+              </Router>
+            </CartProvider>
+          </NotificationProvider>
+        </WalletProvider>
+      </AuthProvider>
+    </ErrorBoundary>
   );
 }
 

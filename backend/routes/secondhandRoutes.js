@@ -10,7 +10,7 @@ const {
   searchSecondhandItems
 } = require('../controllers/secondhandController');
 const { authenticateToken } = require('../middlewares/auth');
-const { upload } = require('../middlewares/upload');
+const { uploadMiddleware } = require('../middlewares/uploadMiddleware');
 
 // Public routes
 router.get('/', getAllSecondhandItems);
@@ -21,13 +21,13 @@ router.get('/:id', getSecondhandItemById);
 router.use(authenticateToken);
 
 // Create secondhand item with images
-router.post('/', upload.array('images', 5), createSecondhandItem);
+router.post('/', uploadMiddleware.multiple('images', 5), createSecondhandItem);
 
 // Get user's secondhand items
 router.get('/user/my-items', getUserSecondhandItems);
 
 // Update and delete items
-router.put('/:id', upload.array('images', 5), updateSecondhandItem);
+router.put('/:id', uploadMiddleware.multiple('images', 5), updateSecondhandItem);
 router.delete('/:id', deleteSecondhandItem);
 
 module.exports = router;

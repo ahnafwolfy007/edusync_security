@@ -20,7 +20,7 @@ import {
 } from 'react-icons/fi';
 import { useAuth } from '../context/AuthContext';
 import { useNotification } from '../context/NotificationContext';
-import { api } from '../utils/api';
+import api, { apiHelpers } from '../api';
 
 const Profile = () => {
   const { user, updateUser } = useAuth();
@@ -30,13 +30,11 @@ const Profile = () => {
   const [editing, setEditing] = useState(false);
   const [loading, setLoading] = useState(false);
   const [profileForm, setProfileForm] = useState({
-    name: user?.name || '',
+    fullName: user?.full_name || user?.name || '',
     email: user?.email || '',
     phone: user?.phone || '',
     location: user?.location || '',
-    bio: user?.bio || '',
-    dateOfBirth: user?.dateOfBirth || '',
-    avatar: user?.avatar || ''
+    avatar: user?.profile_picture || user?.avatar || ''
   });
   const [addressForm, setAddressForm] = useState({
     street: user?.address?.street || '',
@@ -60,15 +58,32 @@ const Profile = () => {
     showLocation: user?.privacy?.showLocation ?? true
   });
 
+  // Build full avatar URL if backend served relative path
+  const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+  const backendOrigin = apiBase.replace(/\/api\/?$/, '');
+  const resolveAvatar = (raw) => {
+    if (!raw) return '/placeholder/100/100';
+    const p = raw.replace(/\\/g, '/');
+    if (p.startsWith('http://') || p.startsWith('https://')) return p;
+    if (p.startsWith('/')) return backendOrigin + p; // already rooted
+    return `${backendOrigin}/${p}`;
+  };
+
   const handleProfileUpdate = async (e) => {
     e.preventDefault();
     setLoading(true);
     
     try {
-      const response = await api.put('/api/user/profile', profileForm);
+      const payload = {
+        fullName: profileForm.fullName,
+        phone: profileForm.phone,
+        location: profileForm.location
+      };
+      const response = await apiHelpers.user.updateProfile(payload);
       
-      if (response.data.success) {
-        updateUser(response.data.user);
+      if (response.data.success || response.data?.data?.user) {
+        const updated = response.data.data?.user || response.data.user;
+        updateUser({ ...updated, full_name: updated.full_name || updated.fullName });
         showNotification('Profile updated successfully', 'success');
         setEditing(false);
       } else {
@@ -87,7 +102,7 @@ const Profile = () => {
     setLoading(true);
     
     try {
-      const response = await api.put('/api/user/address', addressForm);
+  const response = await api.put('/user/address', addressForm);
       
       if (response.data.success) {
         updateUser(response.data.user);
@@ -107,7 +122,7 @@ const Profile = () => {
     setLoading(true);
     
     try {
-      const response = await api.put('/api/user/preferences', preferences);
+  const response = await api.put('/user/preferences', preferences);
       
       if (response.data.success) {
         updateUser(response.data.user);
@@ -127,7 +142,7 @@ const Profile = () => {
     setLoading(true);
     
     try {
-      const response = await api.put('/api/user/privacy', privacy);
+  const response = await api.put('/user/privacy', privacy);
       
       if (response.data.success) {
         updateUser(response.data.user);
@@ -158,19 +173,15 @@ const Profile = () => {
     }
 
     setLoading(true);
-    const formData = new FormData();
-    formData.append('avatar', file);
-
     try {
-      const response = await api.post('/api/user/avatar', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data'
-        }
-      });
+      const response = await apiHelpers.user.updateProfilePicture(file);
 
       if (response.data.success) {
-        setProfileForm(prev => ({ ...prev, avatar: response.data.avatarUrl }));
-        updateUser({ ...user, avatar: response.data.avatarUrl });
+        const rel = response.data.data?.profilePicture || response.data.data?.avatar;
+        const abs = response.data.data?.absoluteProfilePicture;
+        const avatarUrl = abs || resolveAvatar(rel);
+        setProfileForm(prev => ({ ...prev, avatar: avatarUrl }));
+        updateUser({ ...user, profile_picture: rel, avatar: avatarUrl });
         showNotification('Profile picture updated successfully', 'success');
       } else {
         showNotification(response.data.message || 'Failed to update profile picture', 'error');
@@ -208,23 +219,30 @@ const Profile = () => {
         <div className="flex items-center space-x-6 mb-6">
           <div className="relative">
             <img
-              src={profileForm.avatar || '/api/placeholder/100/100'}
+              src={resolveAvatar(profileForm.avatar)}
               alt="Profile"
-              className="w-20 h-20 rounded-full object-cover"
+              className="w-20 h-20 rounded-full object-cover border border-gray-200"
+              onError={(e) => { e.currentTarget.src = '/placeholder/100/100'; }}
             />
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              className="absolute bottom-0 right-0 p-1 bg-blue-600 text-white rounded-full hover:bg-blue-700 transition-colors"
-            >
-              <FiCamera className="w-3 h-3" />
-            </button>
-            <input
-              type="file"
-              ref={fileInputRef}
-              onChange={handleAvatarUpload}
-              accept="image/*"
-              className="hidden"
-            />
+            {editing && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="absolute bottom-0 right-0 p-1.5 bg-blue-600 text-white rounded-full hover:bg-blue-700 transition-colors shadow"
+                  aria-label="Change profile picture"
+                >
+                  <FiCamera className="w-3 h-3" />
+                </button>
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  onChange={handleAvatarUpload}
+                  accept="image/*"
+                  className="hidden"
+                />
+              </>
+            )}
           </div>
           <div>
             <h4 className="font-medium text-gray-900">{user?.name}</h4>
@@ -244,8 +262,8 @@ const Profile = () => {
               <label className="form-label">Full Name</label>
               <input
                 type="text"
-                value={profileForm.name}
-                onChange={(e) => setProfileForm(prev => ({ ...prev, name: e.target.value }))}
+                value={profileForm.fullName}
+                onChange={(e) => setProfileForm(prev => ({ ...prev, fullName: e.target.value }))}
                 className="form-input"
                 disabled={!editing}
                 required

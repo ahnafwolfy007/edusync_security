@@ -14,7 +14,7 @@ import {
   FiTrendingUp,
   FiShoppingBag
 } from 'react-icons/fi';
-import { api } from '../utils/api';
+import api from '../api';
 import { useNotification } from '../context/NotificationContext';
 import { useAuth } from '../context/AuthContext';
 
@@ -77,8 +77,10 @@ const SecondhandMarket = () => {
         ...(priceRange.max && { maxPrice: priceRange.max })
       });
 
-      const response = await api.get(`/api/products/secondhand?${params}`);
-      setProducts(response.data.products || []);
+  const response = await api.get(`/secondhand?${params}`);
+  // Backend typically responds with { success, data: [...] }
+  const items = response?.data?.data ?? response?.data?.products ?? [];
+  setProducts(items);
     } catch (error) {
       console.error('Error fetching products:', error);
       showNotification('Error loading products', 'error');
@@ -93,14 +95,14 @@ const SecondhandMarket = () => {
   };
 
   const toggleFavorite = async (productId) => {
+    // No backend endpoint yet; optimistically toggle locally
     try {
-      await api.post(`/api/products/${productId}/favorite`);
-      showNotification('Added to favorites', 'success');
-      setProducts(products.map(product => 
-        product.id === productId 
+      setProducts(products.map(product =>
+        product.id === productId
           ? { ...product, isFavorite: !product.isFavorite }
           : product
       ));
+      showNotification('Favorites updated', 'success');
     } catch (error) {
       console.error('Error toggling favorite:', error);
       showNotification('Error updating favorites', 'error');
@@ -121,7 +123,7 @@ const SecondhandMarket = () => {
     <div className="card hover:shadow-xl transition-all duration-300 cursor-pointer group">
       <div className="relative">
         <img
-          src={product.images?.[0] || '/api/placeholder/400/300'}
+          src={product.images?.[0] || '/placeholder/400/300'}
           alt={product.title}
           className="w-full h-48 object-cover"
           onClick={() => navigate(`/product/${product.id}`)}
@@ -187,7 +189,7 @@ const SecondhandMarket = () => {
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-2">
             <img
-              src={product.seller?.avatar || '/api/placeholder/32/32'}
+              src={product.seller?.avatar || '/placeholder/32/32'}
               alt={product.seller?.name}
               className="w-6 h-6 rounded-full"
             />
@@ -212,7 +214,7 @@ const SecondhandMarket = () => {
     <div className="card hover:shadow-lg transition-all duration-300 cursor-pointer">
       <div className="p-4 flex space-x-4">
         <img
-          src={product.images?.[0] || '/api/placeholder/150/150'}
+          src={product.images?.[0] || '/placeholder/150/150'}
           alt={product.title}
           className="w-24 h-24 object-cover rounded-lg"
           onClick={() => navigate(`/product/${product.id}`)}
@@ -261,7 +263,7 @@ const SecondhandMarket = () => {
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-2">
               <img
-                src={product.seller?.avatar || '/api/placeholder/24/24'}
+                src={product.seller?.avatar || '/placeholder/24/24'}
                 alt={product.seller?.name}
                 className="w-5 h-5 rounded-full"
               />

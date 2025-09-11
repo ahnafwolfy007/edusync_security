@@ -19,7 +19,7 @@ import {
 } from 'react-icons/fi';
 import { useWallet } from '../context/WalletContext';
 import { useNotification } from '../context/NotificationContext';
-import { api } from '../utils/api';
+import api from '../api';
 
 const Wallet = () => {
   const navigate = useNavigate();
@@ -57,7 +57,7 @@ const Wallet = () => {
 
     setLoading(true);
     try {
-      const response = await api.post('/api/wallet/add-money', {
+  const response = await api.post('/wallet/add-money', {
         amount: parseFloat(addMoneyForm.amount),
         method: addMoneyForm.method
       });
@@ -92,7 +92,7 @@ const Wallet = () => {
 
     setLoading(true);
     try {
-      const response = await api.post('/api/wallet/send-money', {
+  const response = await api.post('/wallet/send-money', {
         recipient: sendMoneyForm.recipient,
         amount: parseFloat(sendMoneyForm.amount),
         note: sendMoneyForm.note

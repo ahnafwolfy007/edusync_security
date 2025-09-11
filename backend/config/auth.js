@@ -8,7 +8,9 @@ const authConfig = {
   JWT_EXPIRES_IN: process.env.JWT_EXPIRES_IN || '7d',
   REFRESH_TOKEN_SECRET: process.env.REFRESH_TOKEN_SECRET || 'edusync_refresh_token_secret_key_2025',
   REFRESH_TOKEN_EXPIRES_IN: process.env.REFRESH_TOKEN_EXPIRES_IN || '30d',
-  BCRYPT_ROUNDS: parseInt(process.env.BCRYPT_ROUNDS) || 12,
+  // Hash parameters for simpleHash (educational only)
+  CUSTOM_HASH_WORK_FACTOR: parseInt(process.env.CUSTOM_HASH_WORK_FACTOR) || 1000,
+  CUSTOM_HASH_OUTPUT_BITS: parseInt(process.env.CUSTOM_HASH_OUTPUT_BITS) || 128,
 
   // Token blacklist (for logout)
   tokenBlacklist: new Set(),

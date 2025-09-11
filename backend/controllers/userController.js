@@ -1,5 +1,17 @@
 const dbConfig = require('../config/db');
-const bcrypt = require('bcryptjs');
+const { verify_aaa_7, generateSaltFromEmail } = require('../utils/simpleHash');
+
+function parseAaa7(stored) {
+  if (!stored || typeof stored !== 'string') return null;
+  const rawParts = stored.split('$').filter(p => p !== '');
+  if (rawParts[0] !== 'aaa_7') return null;
+  if (rawParts.length < 5) return null;
+  const [prefix, wf, bits, salt, hash] = rawParts;
+  if (!wf || !bits || !salt || !hash) return null;
+  return { workFactor: parseInt(wf,10), outputBits: parseInt(bits,10), salt, hash };
+}
+const fs = require('fs');
+const path = require('path');
 
 class UserController {
   // Get user profile
@@ -10,7 +22,7 @@ class UserController {
 
       const userResult = await db.query(
         `SELECT u.user_id, u.full_name, u.email, u.phone, u.institution, u.location, 
-                u.created_at, u.updated_at, r.role_name,
+                u.created_at, u.updated_at, u.profile_picture, r.role_name,
                 w.balance as wallet_balance
          FROM users u 
          JOIN roles r ON u.role_id = r.role_id 
@@ -26,7 +38,22 @@ class UserController {
         });
       }
 
-      const user = userResult.rows[0];
+      const rawUser = userResult.rows[0];
+      const user = {
+        user_id: rawUser.user_id,
+        full_name: rawUser.full_name,
+        name: rawUser.full_name, // frontend convenience
+        email: rawUser.email,
+        phone: rawUser.phone,
+        institution: rawUser.institution,
+        location: rawUser.location,
+        role_name: rawUser.role_name,
+        wallet_balance: rawUser.wallet_balance,
+        profile_picture: rawUser.profile_picture,
+        avatar: rawUser.profile_picture,
+        created_at: rawUser.created_at,
+        updated_at: rawUser.updated_at
+      };
 
       // Get user's listings count
       const listingsResult = await db.query(
@@ -108,12 +135,20 @@ class UserController {
         });
       }
 
-      const { password_hash, ...updatedUser } = result.rows[0];
+      const { password_hash, profile_picture, ...updatedUser } = result.rows[0];
 
       res.json({
         success: true,
         message: 'Profile updated successfully',
-        data: { user: updatedUser }
+        data: { 
+          user: { 
+            ...updatedUser, 
+            profile_picture, 
+            avatar: profile_picture, 
+            full_name: updatedUser.full_name,
+            name: updatedUser.full_name 
+          } 
+        }
       });
 
     } catch (error) {
@@ -298,20 +333,39 @@ class UserController {
           message: 'No image file provided'
         });
       }
+      const db = dbConfig.db;
+
+      // Fetch existing profile picture to delete it
+      const existingResult = await db.query('SELECT profile_picture FROM users WHERE user_id = $1', [userId]);
+      const existingPath = existingResult.rows[0]?.profile_picture;
 
       const profilePicturePath = `/uploads/profiles/${req.file.filename}`;
-      
-      const db = dbConfig.db;
+
+      // Delete old file if it exists and is inside the expected directory
+      if (existingPath && existingPath !== profilePicturePath && existingPath.startsWith('/uploads/profiles/')) {
+        const absoluteOldPath = path.join(__dirname, '..', existingPath.replace(/^\//, ''));
+        fs.stat(absoluteOldPath, (err, stats) => {
+          if (!err && stats.isFile()) {
+            fs.unlink(absoluteOldPath, (unlinkErr) => {
+              if (unlinkErr) {
+                console.warn('Failed to delete old profile picture:', unlinkErr.message);
+              }
+            });
+          }
+        });
+      }
 
       await db.query(
         'UPDATE users SET profile_picture = $1, updated_at = NOW() WHERE user_id = $2',
         [profilePicturePath, userId]
       );
 
+      const absoluteUrl = `${req.protocol}://${req.get('host')}${profilePicturePath}`;
+
       res.json({
         success: true,
         message: 'Profile picture updated successfully',
-        data: { profilePicture: profilePicturePath }
+        data: { profilePicture: profilePicturePath, avatar: profilePicturePath, absoluteProfilePicture: absoluteUrl }
       });
 
     } catch (error) {
@@ -381,7 +435,7 @@ class UserController {
 
       // Verify password
       const userResult = await db.query(
-        'SELECT password_hash FROM users WHERE user_id = $1',
+        'SELECT password_hash, email FROM users WHERE user_id = $1',
         [userId]
       );
 
@@ -392,8 +446,20 @@ class UserController {
         });
       }
 
-      const isPasswordValid = await bcrypt.compare(password, userResult.rows[0].password_hash);
-      if (!isPasswordValid) {
+      let valid = false;
+      const stored = userResult.rows[0].password_hash;
+      if (stored && stored.includes('aaa_7')) {
+        const parsed = parseAaa7(stored.trim());
+        if (parsed) {
+          const emailDerivedSalt = generateSaltFromEmail(userResult.rows[0].email.toLowerCase());
+          const saltToUse = parsed.salt === emailDerivedSalt ? emailDerivedSalt : parsed.salt; // fallback
+          valid = verify_aaa_7(password, parsed.hash, saltToUse, parsed.workFactor, parsed.outputBits);
+        }
+      }
+      if (!valid) {
+        console.warn('[DeleteAccount] Password verification failed. Stored value:', stored);
+      }
+      if (!valid) {
         return res.status(400).json({
           success: false,
           message: 'Invalid password'

@@ -54,7 +54,18 @@ class Database {
     const client = await this.pool.connect();
     
     try {
-      await client.query('BEGIN');
+      // Temporarily disable single transaction to surface first failing statement
+      const originalQuery = client.query.bind(client);
+      client.query = async (text, params) => {
+        const preview = (text || '').toString().split('\n').map(l=>l.trim()).filter(Boolean)[0];
+        console.log('[MIGRATION]', preview);
+        try {
+          return await originalQuery(text, params);
+        } catch (err) {
+          console.error('[MIGRATION ERROR]', preview, err.code, err.message);
+          throw err;
+        }
+      };
 
       // Create ROLES table
       await client.query(`
@@ -79,6 +90,12 @@ class Database {
           updated_at TIMESTAMP DEFAULT NOW()
         )
       `);
+
+  // Ensure profile picture column exists for user avatars
+  await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_picture TEXT`);
+  // Ensure email verification fields
+  await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS is_email_verified BOOLEAN DEFAULT FALSE`);
+  await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified_at TIMESTAMP`);
 
       // Create BUSINESS_APPLICATIONS table
       await client.query(`
@@ -109,6 +126,9 @@ class Database {
         )
       `);
 
+  // Ensure optional branding/image column exists
+  await client.query(`ALTER TABLE businesses ADD COLUMN IF NOT EXISTS image TEXT`);
+
       // Create BUSINESS_PRODUCTS table
       await client.query(`
         CREATE TABLE IF NOT EXISTS business_products (
@@ -125,18 +145,31 @@ class Database {
         )
       `);
 
+  // Ensure category & image columns for filtering / UI
+  await client.query(`ALTER TABLE business_products ADD COLUMN IF NOT EXISTS category VARCHAR(100)`);
+  await client.query(`ALTER TABLE business_products ADD COLUMN IF NOT EXISTS image TEXT`);
+
       // Create BUSINESS_ORDERS table
       await client.query(`
         CREATE TABLE IF NOT EXISTS business_orders (
           order_id SERIAL PRIMARY KEY,
           user_id INT NOT NULL REFERENCES users(user_id),
           business_id INT NOT NULL REFERENCES businesses(business_id),
-          order_date TIMESTAMP DEFAULT NOW(),
-          payment_method VARCHAR(20) NOT NULL,
-          status VARCHAR(20) DEFAULT 'pending',
-          created_at TIMESTAMP DEFAULT NOW()
+      order_date TIMESTAMP DEFAULT NOW(),
+      payment_method VARCHAR(50) NOT NULL,
+      status VARCHAR(20) DEFAULT 'pending',
+      created_at TIMESTAMP DEFAULT NOW()
         )
       `);
+
+    // Ensure newer expected columns exist on business_orders
+    await client.query(`ALTER TABLE business_orders ADD COLUMN IF NOT EXISTS total_amount DECIMAL(12,2) DEFAULT 0`);
+    await client.query(`ALTER TABLE business_orders ADD COLUMN IF NOT EXISTS delivery_address TEXT`);
+    await client.query(`ALTER TABLE business_orders ADD COLUMN IF NOT EXISTS special_instructions TEXT`);
+    await client.query(`ALTER TABLE business_orders ADD COLUMN IF NOT EXISTS payment_status VARCHAR(20) DEFAULT 'pending'`);
+    await client.query(`ALTER TABLE business_orders ADD COLUMN IF NOT EXISTS rating INT`);
+    await client.query(`ALTER TABLE business_orders ADD COLUMN IF NOT EXISTS review TEXT`);
+    await client.query(`ALTER TABLE business_orders ADD COLUMN IF NOT EXISTS reviewed_at TIMESTAMP`);
 
       // Create BUSINESS_ORDER_ITEMS table
       await client.query(`
@@ -144,17 +177,23 @@ class Database {
           order_item_id SERIAL PRIMARY KEY,
           order_id INT NOT NULL REFERENCES business_orders(order_id) ON DELETE CASCADE,
           product_id INT NOT NULL REFERENCES business_products(product_id),
-          quantity INT NOT NULL CHECK (quantity > 0)
+      quantity INT NOT NULL CHECK (quantity > 0)
         )
       `);
+
+    // Ensure newer expected columns exist on business_order_items
+    await client.query(`ALTER TABLE business_order_items ADD COLUMN IF NOT EXISTS price DECIMAL(12,2)`);
+    await client.query(`ALTER TABLE business_order_items ADD COLUMN IF NOT EXISTS terms_accepted BOOLEAN DEFAULT FALSE`);
 
       // Create CATEGORIES table
       await client.query(`
         CREATE TABLE IF NOT EXISTS categories (
           category_id SERIAL PRIMARY KEY,
-          category_name VARCHAR(100) UNIQUE NOT NULL
+      category_name VARCHAR(100) UNIQUE NOT NULL
         )
       `);
+    // Ensure category_type column exists (seed uses it)
+    await client.query(`ALTER TABLE categories ADD COLUMN IF NOT EXISTS category_type VARCHAR(50)`);
 
       // Create SECONDHAND_ITEMS table
       await client.query(`
@@ -309,6 +348,14 @@ class Database {
         )
       `);
 
+  // Ensure newer expected columns exist on transactions to match wallet controller
+  await client.query(`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS user_id INT REFERENCES users(user_id)`);
+  await client.query(`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS type VARCHAR(50)`);
+  await client.query(`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS payment_method VARCHAR(50)`);
+  await client.query(`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS reference_number VARCHAR(100)`);
+  await client.query(`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS metadata JSONB`);
+  await client.query(`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW()`);
+
       // Create LOST_FOUND_ITEMS table
       await client.query(`
         CREATE TABLE IF NOT EXISTS lost_found_items (
@@ -337,6 +384,133 @@ class Database {
         )
       `);
 
+      // Create NOTIFICATIONS table (user specific)
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS notifications (
+          notification_id SERIAL PRIMARY KEY,
+          user_id INT NOT NULL REFERENCES users(user_id),
+          type VARCHAR(50) DEFAULT 'system',
+          title VARCHAR(150),
+          message TEXT,
+          data JSONB,
+          is_read BOOLEAN DEFAULT FALSE,
+          created_at TIMESTAMP DEFAULT NOW()
+        )
+      `);
+
+      // Email verification tokens
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS email_verification_tokens (
+          token_id SERIAL PRIMARY KEY,
+          user_id INT REFERENCES users(user_id) ON DELETE CASCADE,
+          email VARCHAR(150) NOT NULL,
+          otp_code VARCHAR(10) NOT NULL,
+          expires_at TIMESTAMP NOT NULL,
+          used BOOLEAN DEFAULT FALSE,
+          created_at TIMESTAMP DEFAULT NOW(),
+          UNIQUE(email, otp_code)
+        )
+      `);
+
+  // Migration safety: adjust email_verification_tokens silently (ignore failures)
+  try { await client.query(`ALTER TABLE email_verification_tokens ALTER COLUMN user_id DROP NOT NULL`); } catch(e) {}
+  // (Removed duplicate unique constraint migration to avoid transaction abort)
+
+  /* FREE MARKETPLACE FAVORITES table moved below after free_marketplace_items definition */
+
+  // Free Marketplace core tables (ensure created before favorites)
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS free_marketplace_items (
+          item_id SERIAL PRIMARY KEY,
+          giver_id INT NOT NULL REFERENCES users(user_id),
+          category_id INT REFERENCES categories(category_id),
+          item_name VARCHAR(150) NOT NULL,
+          description TEXT,
+          condition_note TEXT,
+          pickup_location VARCHAR(255) NOT NULL,
+          contact_info VARCHAR(255) NOT NULL,
+          is_available BOOLEAN DEFAULT TRUE,
+          posted_at TIMESTAMP DEFAULT NOW()
+        )
+      `);
+
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS free_marketplace_requests (
+          request_id SERIAL PRIMARY KEY,
+          item_id INT NOT NULL REFERENCES free_marketplace_items(item_id) ON DELETE CASCADE,
+          requester_id INT NOT NULL REFERENCES users(user_id),
+          message TEXT,
+          status VARCHAR(20) DEFAULT 'pending',
+          created_at TIMESTAMP DEFAULT NOW()
+        )
+      `);
+
+      // Indexes for free marketplace performance
+      await client.query('CREATE INDEX IF NOT EXISTS idx_free_items_giver ON free_marketplace_items(giver_id)');
+      await client.query('CREATE INDEX IF NOT EXISTS idx_free_items_available ON free_marketplace_items(is_available)');
+      await client.query('CREATE INDEX IF NOT EXISTS idx_free_requests_item ON free_marketplace_requests(item_id)');
+
+      // Create FREE MARKETPLACE FAVORITES table (after items table exists)
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS free_marketplace_favorites (
+          favorite_id SERIAL PRIMARY KEY,
+          user_id INT NOT NULL REFERENCES users(user_id),
+          item_id INT NOT NULL REFERENCES free_marketplace_items(item_id) ON DELETE CASCADE,
+          created_at TIMESTAMP DEFAULT NOW(),
+          UNIQUE(user_id, item_id)
+        )
+      `);
+
+      // Accommodation tables (properties + images + inquiries)
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS accommodation_properties (
+          property_id SERIAL PRIMARY KEY,
+          owner_id INT NOT NULL REFERENCES users(user_id),
+          property_type VARCHAR(50) NOT NULL,
+          title VARCHAR(150) NOT NULL,
+          description TEXT,
+          location VARCHAR(255) NOT NULL,
+          area VARCHAR(100),
+          rent_amount DECIMAL(12,2) NOT NULL CHECK (rent_amount >= 0),
+          deposit_amount DECIMAL(12,2) DEFAULT 0 CHECK (deposit_amount >= 0),
+          property_size VARCHAR(50),
+          amenities TEXT[],
+          available_from DATE,
+          contact_phone VARCHAR(30),
+          contact_email VARCHAR(150),
+          is_available BOOLEAN DEFAULT TRUE,
+          created_at TIMESTAMP DEFAULT NOW(),
+          updated_at TIMESTAMP DEFAULT NOW()
+        )
+      `);
+
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS accommodation_images (
+          image_id SERIAL PRIMARY KEY,
+          property_id INT NOT NULL REFERENCES accommodation_properties(property_id) ON DELETE CASCADE,
+          image_url TEXT NOT NULL,
+          is_primary BOOLEAN DEFAULT FALSE,
+          created_at TIMESTAMP DEFAULT NOW()
+        )
+      `);
+
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS accommodation_inquiries (
+          inquiry_id SERIAL PRIMARY KEY,
+          property_id INT NOT NULL REFERENCES accommodation_properties(property_id) ON DELETE CASCADE,
+          inquirer_id INT NOT NULL REFERENCES users(user_id),
+          message TEXT,
+          contact_phone VARCHAR(30),
+          preferred_date DATE,
+          created_at TIMESTAMP DEFAULT NOW()
+        )
+      `);
+
+      // Indexes for accommodation
+      await client.query('CREATE INDEX IF NOT EXISTS idx_accommodation_owner ON accommodation_properties(owner_id)');
+      await client.query('CREATE INDEX IF NOT EXISTS idx_accommodation_available ON accommodation_properties(is_available)');
+      await client.query('CREATE INDEX IF NOT EXISTS idx_accommodation_type ON accommodation_properties(property_type)');
+
       // Create indexes for better performance
       await client.query('CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)');
       await client.query('CREATE INDEX IF NOT EXISTS idx_users_role ON users(role_id)');
@@ -348,6 +522,33 @@ class Database {
       await client.query('CREATE INDEX IF NOT EXISTS idx_payments_seller ON payments(seller_id)');
       await client.query('CREATE INDEX IF NOT EXISTS idx_wallets_user ON wallets(user_id)');
       await client.query('CREATE INDEX IF NOT EXISTS idx_transactions_wallet ON transactions(wallet_id)');
+
+      // --- Chat feature tables (buyer-seller messaging for secondhand items) ---
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS chats (
+          chat_id SERIAL PRIMARY KEY,
+          item_id INT REFERENCES secondhand_items(item_id),
+          seller_id INT NOT NULL REFERENCES users(user_id),
+          buyer_id INT NOT NULL REFERENCES users(user_id),
+          created_at TIMESTAMP DEFAULT NOW(),
+          updated_at TIMESTAMP DEFAULT NOW(),
+          UNIQUE(item_id, seller_id, buyer_id)
+        )
+      `);
+
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS chat_messages (
+          message_id SERIAL PRIMARY KEY,
+          chat_id INT NOT NULL REFERENCES chats(chat_id) ON DELETE CASCADE,
+          sender_id INT NOT NULL REFERENCES users(user_id),
+          content TEXT NOT NULL,
+          is_read BOOLEAN DEFAULT FALSE,
+          created_at TIMESTAMP DEFAULT NOW()
+        )
+      `);
+
+      await client.query('CREATE INDEX IF NOT EXISTS idx_chats_participants ON chats(seller_id, buyer_id)');
+      await client.query('CREATE INDEX IF NOT EXISTS idx_chat_messages_chat ON chat_messages(chat_id)');
 
       await client.query('COMMIT');
       console.log('✅ All tables created successfully');

@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { FiMail, FiLock, FiEye, FiEyeOff, FiUser, FiPhone, FiMapPin } from 'react-icons/fi';
+import { FiMail, FiLock, FiEye, FiEyeOff, FiUser, FiPhone, FiMapPin, FiShield } from 'react-icons/fi';
 import { useAuth } from '../context/AuthContext';
 import { useNotification } from '../context/NotificationContext';
 
@@ -12,15 +12,30 @@ const Register = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [currentStep, setCurrentStep] = useState(1);
+  const [otpSent, setOtpSent] = useState(false);
+  const [otpVerified, setOtpVerified] = useState(false);
+  const [otpDigits, setOtpDigits] = useState(['', '', '', '', '', '']);
+  const otpInputsRef = useRef([]);
+  const [resendTimer, setResendTimer] = useState(0);
+  const [sendingOtp, setSendingOtp] = useState(false);
+  const [verifyingOtp, setVerifyingOtp] = useState(false);
+  const [errors, setErrors] = useState({});
+  const allowedDomain = (import.meta.env.VITE_ALLOWED_EMAIL_DOMAIN || '@bscse.uiu.ac.bd');
+
+  // Countdown for resend OTP
+  useEffect(()=>{
+    if (resendTimer <= 0) return;
+    const t = setTimeout(()=> setResendTimer(resendTimer - 1), 1000);
+    return ()=> clearTimeout(t);
+  }, [resendTimer]);
   const [formData, setFormData] = useState({
     // Step 1: Basic Info
     name: '',
     email: '',
     phone: '',
     // Step 2: Location & Role
-    university: '',
-    location: '',
-    role: 'student',
+  location: '',
+  role: 'student',
     // Step 3: Password
     password: '',
     confirmPassword: '',
@@ -29,19 +44,7 @@ const Register = () => {
     agreeToPrivacy: false
   });
 
-  const universities = [
-    'University of Dhaka',
-    'Bangladesh University of Engineering and Technology (BUET)',
-    'United International University (UIU)',
-    'Dhaka University of Engineering & Technology (DUET)',
-    'North South University',
-    'BRAC University',
-    'Independent University Bangladesh (IUB)',
-    'East West University',
-    'American International University-Bangladesh (AIUB)',
-    'Daffodil International University',
-    'Other'
-  ];
+  
 
   const roles = [
     { id: 'student', name: 'Student', description: 'I am a university student' },
@@ -62,17 +65,14 @@ const Register = () => {
 
     setLoading(true);
     try {
-      const userData = {
-        name: formData.name,
-        email: formData.email,
-        phone: formData.phone,
-        university: formData.university,
-        location: formData.location,
-        role: formData.role,
-        password: formData.password
-      };
-
-      await register(userData);
+  if (!otpVerified) {
+        showError('Please verify your email with OTP first.');
+        setLoading(false);
+        return;
+      }
+  const otpCode = otpDigits.join('');
+  const userData = { name: formData.name, email: formData.email, phone: formData.phone, location: formData.location, role: formData.role, password: formData.password, otpCode };
+      await register(userData); // backend expects otpCode now
       showSuccess('Account created successfully! Welcome to EduSync!');
       navigate('/dashboard');
     } catch (error) {
@@ -94,62 +94,36 @@ const Register = () => {
   };
 
   const validateStep1 = () => {
-    if (!formData.name.trim()) {
-      showError('Please enter your full name');
-      return false;
-    }
-    if (!formData.email.trim()) {
-      showError('Please enter your email address');
-      return false;
-    }
-    if (!formData.email.includes('@')) {
-      showError('Please enter a valid email address');
-      return false;
-    }
-    if (!formData.phone.trim()) {
-      showError('Please enter your phone number');
-      return false;
-    }
+  const newErrors = {};
+  if (!formData.name.trim()) newErrors.name = 'Full name required';
+  if (!formData.email.trim()) newErrors.email = 'Email required';
+  else if (!formData.email.includes('@')) newErrors.email = 'Invalid email format';
+  else if (!formData.email && formData.email.toLowerCase().endsWith(allowedDomain) === false) newErrors.email = `Must end with ${allowedDomain}`;
+  else if (!formData.email.toLowerCase().endsWith(allowedDomain)) newErrors.email = `Must end with ${allowedDomain}`;
+  if (!formData.phone.trim()) newErrors.phone = 'Phone required';
+  setErrors(prev => ({ ...prev, ...newErrors }));
+  if (Object.keys(newErrors).length) return false;
     return true;
   };
 
   const validateStep2 = () => {
-    if (!formData.university) {
-      showError('Please select your university');
-      return false;
-    }
-    if (!formData.location.trim()) {
-      showError('Please enter your location');
-      return false;
-    }
-    if (!formData.role) {
-      showError('Please select your role');
-      return false;
-    }
+  const newErrors = {};
+  if (!formData.location.trim()) newErrors.location = 'Location required';
+  if (!formData.role) newErrors.role = 'Role required';
+  setErrors(prev => ({ ...prev, ...newErrors }));
+  if (Object.keys(newErrors).length) return false;
     return true;
   };
 
   const validateStep3 = () => {
-    if (!formData.password) {
-      showError('Please enter a password');
-      return false;
-    }
-    if (formData.password.length < 6) {
-      showError('Password must be at least 6 characters long');
-      return false;
-    }
-    if (formData.password !== formData.confirmPassword) {
-      showError('Passwords do not match');
-      return false;
-    }
-    if (!formData.agreeToTerms) {
-      showError('Please agree to the Terms of Service');
-      return false;
-    }
-    if (!formData.agreeToPrivacy) {
-      showError('Please agree to the Privacy Policy');
-      return false;
-    }
+  const newErrors = {};
+  if (!formData.password) newErrors.password = 'Password required';
+  else if (formData.password.length < 6) newErrors.password = 'At least 6 characters';
+  if (formData.password !== formData.confirmPassword) newErrors.confirmPassword = 'Passwords do not match';
+  if (!formData.agreeToTerms) newErrors.agreeToTerms = 'Required';
+  if (!formData.agreeToPrivacy) newErrors.agreeToPrivacy = 'Required';
+  setErrors(prev => ({ ...prev, ...newErrors }));
+  if (Object.keys(newErrors).length) return false;
     return true;
   };
 
@@ -166,7 +140,7 @@ const Register = () => {
 
   const renderStepIndicator = () => (
     <div className="flex items-center justify-center mb-8">
-      {[1, 2, 3].map((step) => (
+  {[1, 2, 3].map((step) => (
         <React.Fragment key={step}>
           <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
             currentStep >= step
@@ -209,6 +183,7 @@ const Register = () => {
             placeholder="Enter your full name"
           />
         </div>
+  {errors.name && <p className="text-xs text-red-600 mt-1">{errors.name}</p>}
       </div>
 
       <div className="form-group">
@@ -229,7 +204,8 @@ const Register = () => {
             placeholder="Enter your email address"
           />
         </div>
-        <p className="form-help">Use your university email if available</p>
+  <p className="form-help">Must be institutional: {allowedDomain}</p>
+  {errors.email && <p className="text-xs text-red-600 mt-1">{errors.email}</p>}
       </div>
 
       <div className="form-group">
@@ -249,6 +225,7 @@ const Register = () => {
             placeholder="Enter your phone number"
           />
         </div>
+  {errors.phone && <p className="text-xs text-red-600 mt-1">{errors.phone}</p>}
       </div>
     </div>
   );
@@ -256,25 +233,113 @@ const Register = () => {
   const renderStep2 = () => (
     <div className="space-y-6">
       <div className="text-center mb-6">
-        <h3 className="text-lg font-medium text-gray-900">University & Role</h3>
-        <p className="text-sm text-gray-600">Help us customize your experience</p>
+        <h3 className="text-lg font-medium text-gray-900">Email Verification & Role</h3>
+        <p className="text-sm text-gray-600">Verify your institutional email</p>
       </div>
 
       <div className="form-group">
-        <label htmlFor="university" className="form-label">University</label>
-        <select
-          id="university"
-          name="university"
-          required
-          value={formData.university}
-          onChange={handleChange}
-          className="form-input"
-        >
-          <option value="">Select your university</option>
-          {universities.map((uni) => (
-            <option key={uni} value={uni}>{uni}</option>
-          ))}
-        </select>
+        <label className="form-label flex items-center">Email OTP Verification {otpVerified && <span className="ml-2 text-green-600 text-xs font-semibold flex items-center"><FiShield className="w-4 h-4 mr-1"/>Verified</span>}</label>
+        <div className="flex space-x-2">
+          <input
+            type="text"
+            disabled
+            value={formData.email}
+            className="form-input flex-1 bg-gray-100"
+          />
+          <button
+            type="button"
+            onClick={async () => {
+              if (resendTimer > 0 || otpVerified) return;
+              if (!validateStep1()) return;
+              try {
+                setSendingOtp(true);
+                const res = await fetch((import.meta.env.VITE_API_URL || 'http://localhost:5000/api') + '/auth/request-otp', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ email: formData.email })
+                });
+                const data = await res.json();
+                if (data.success) {
+                  setOtpSent(true);
+                  setResendTimer(45);
+                } else {
+                  showError(data.message || 'Failed to send OTP');
+                }
+              } catch (e) {
+                showError('Failed to send OTP');
+              } finally {
+                setSendingOtp(false);
+              }
+            }}
+            className={`btn btn-secondary ${resendTimer>0 || otpVerified ? 'opacity-60 cursor-not-allowed':''}`}
+            disabled={sendingOtp || resendTimer>0 || otpVerified}
+          >{otpVerified ? 'Verified' : sendingOtp ? 'Sending...' : resendTimer>0 ? `Resend (${resendTimer}s)` : (otpSent ? 'Resend OTP' : 'Send OTP')}</button>
+        </div>
+        {otpSent && !otpVerified && (
+          <div className="mt-3">
+            <div className="flex space-x-2 justify-between">
+              {otpDigits.map((d, idx) => (
+                <input
+                  key={idx}
+                  ref={el => otpInputsRef.current[idx] = el}
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={1}
+                  className="w-10 h-12 text-center border rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  value={d}
+                  onChange={(e)=>{
+                    const val = e.target.value.replace(/[^0-9]/g,'');
+                    if (!val) {
+                      const copy = [...otpDigits];
+                      copy[idx] = '';
+                      setOtpDigits(copy);
+                      return;
+                    }
+                    const copy = [...otpDigits];
+                    copy[idx] = val;
+                    setOtpDigits(copy);
+                    if (idx < 5 && val) otpInputsRef.current[idx+1]?.focus();
+                  }}
+                  onKeyDown={(e)=>{
+                    if (e.key === 'Backspace' && !otpDigits[idx] && idx>0) {
+                      otpInputsRef.current[idx-1]?.focus();
+                    }
+                    if (e.key === 'ArrowLeft' && idx>0) otpInputsRef.current[idx-1]?.focus();
+                    if (e.key === 'ArrowRight' && idx<5) otpInputsRef.current[idx+1]?.focus();
+                  }}
+                />
+              ))}
+              <button
+                type="button"
+                className="btn btn-primary ml-2"
+                disabled={otpDigits.some(d=>d==='') || verifyingOtp}
+                onClick={async ()=>{
+                  try {
+                    setVerifyingOtp(true);
+                    const otp = otpDigits.join('');
+                    const res = await fetch((import.meta.env.VITE_API_URL || 'http://localhost:5000/api') + '/auth/verify-otp', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ email: formData.email, otp })
+                    });
+                    const data = await res.json();
+                    if (data.success) {
+                      setOtpVerified(true);
+                    } else {
+                      showError(data.message || 'Invalid OTP');
+                    }
+                  } catch (e) {
+                    showError('OTP verification failed');
+                  } finally {
+                    setVerifyingOtp(false);
+                  }
+                }}
+              >{verifyingOtp ? 'Verifying...' : 'Verify'}</button>
+            </div>
+            <p className="text-xs text-gray-500 mt-2">Enter the 6-digit code sent to your email.</p>
+          </div>
+        )}
+        <p className="form-help text-xs">Email must end with {allowedDomain}</p>
       </div>
 
       <div className="form-group">
@@ -294,6 +359,7 @@ const Register = () => {
             placeholder="Enter your city/area"
           />
         </div>
+  {errors.location && <p className="text-xs text-red-600 mt-1">{errors.location}</p>}
       </div>
 
       <div className="form-group">
@@ -316,6 +382,7 @@ const Register = () => {
             </label>
           ))}
         </div>
+  {errors.role && <p className="text-xs text-red-600 mt-1">{errors.role}</p>}
       </div>
     </div>
   );
@@ -355,7 +422,8 @@ const Register = () => {
             )}
           </button>
         </div>
-        <p className="form-help">Minimum 6 characters</p>
+  <p className="form-help">Minimum 6 characters</p>
+  {errors.password && <p className="text-xs text-red-600 mt-1">{errors.password}</p>}
       </div>
 
       <div className="form-group">
@@ -386,6 +454,7 @@ const Register = () => {
             )}
           </button>
         </div>
+  {errors.confirmPassword && <p className="text-xs text-red-600 mt-1">{errors.confirmPassword}</p>}
       </div>
 
       <div className="space-y-4">
@@ -405,6 +474,7 @@ const Register = () => {
             </Link>
           </label>
         </div>
+  {errors.agreeToTerms && <p className="text-xs text-red-600 -mt-2">{errors.agreeToTerms}</p>}
 
         <div className="flex items-start">
           <input
@@ -422,6 +492,7 @@ const Register = () => {
             </Link>
           </label>
         </div>
+  {errors.agreeToPrivacy && <p className="text-xs text-red-600 -mt-2">{errors.agreeToPrivacy}</p>}
       </div>
     </div>
   );
@@ -470,8 +541,7 @@ const Register = () => {
                   disabled={loading}
                   className={`btn btn-primary ${currentStep === 1 ? 'w-full' : 'ml-auto'}`}
                 >
-                  {loading ? 'Creating Account...' : 
-                   currentStep === 3 ? 'Create Account' : 'Next'}
+                  {currentStep === 3 ? (loading ? 'Creating...' : 'Create Account') : 'Next'}
                 </button>
               </div>
             </form>

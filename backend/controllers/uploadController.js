@@ -8,11 +8,13 @@ class UploadController {
       if (!req.file) {
         return res.status(400).json({
           success: false,
-          message: 'No file uploaded'
+          message: 'No file uploaded. Ensure field name matches (profilePicture or file) and form is multipart/form-data.'
         });
       }
 
-      const fileUrl = `/uploads/${req.file.destination.split('/').pop()}/${req.file.filename}`;
+  // Destination may contain OS-specific separators; use path.basename for folder name
+  const folderName = path.basename(req.file.destination);
+  const fileUrl = `/uploads/${folderName}/${req.file.filename}`;
 
       res.json({
         success: true,
@@ -45,13 +47,16 @@ class UploadController {
         });
       }
 
-      const uploadedFiles = req.files.map(file => ({
-        filename: file.filename,
-        originalName: file.originalname,
-        size: file.size,
-        url: `/uploads/${file.destination.split('/').pop()}/${file.filename}`,
-        mimetype: file.mimetype
-      }));
+      const uploadedFiles = req.files.map(file => {
+        const folderName = path.basename(file.destination);
+        return {
+          filename: file.filename,
+          originalName: file.originalname,
+          size: file.size,
+          url: `/uploads/${folderName}/${file.filename}`,
+          mimetype: file.mimetype
+        };
+      });
 
       res.json({
         success: true,

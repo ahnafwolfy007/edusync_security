@@ -185,7 +185,7 @@ const Navigation = () => {
                 className="flex items-center space-x-2 p-2 rounded-md hover:bg-gray-100 transition-colors duration-200"
               >
                 <img
-                  src={user.avatar || '/api/placeholder/32/32'}
+                  src={user.avatar || '/placeholder/32/32'}
                   alt={user.name}
                   className="w-8 h-8 rounded-full object-cover"
                 />

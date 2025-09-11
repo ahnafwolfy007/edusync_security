@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useWallet } from '../context/WalletContext';
 import { useNotification } from '../context/NotificationContext';
-import { api } from '../utils/api';
+import api from '../api';
 
 const Marketplace = () => {
   const { user } = useAuth();
