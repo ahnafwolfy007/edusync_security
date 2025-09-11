@@ -1,4 +1,8 @@
 import axios from 'axios';
+import SessionManager from './utils/SessionManager';
+
+// Create session manager instance
+const sessionManager = new SessionManager();
 
 // Create axios instance with base configuration
 const api = axios.create({
@@ -12,9 +16,15 @@ const api = axios.create({
 // Request interceptor to add auth token
 api.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('accessToken');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
+    try {
+      const token = sessionManager.getItem('accessToken');
+      if (token) {
+        config.headers.Authorization = `Bearer ${token}`;
+      }
+      // Don't fail if sessionManager has issues - many endpoints don't need auth
+    } catch (error) {
+      console.warn('SessionManager error in request interceptor:', error);
+      // Continue without token for public endpoints
     }
     return config;
   },
@@ -35,7 +45,7 @@ api.interceptors.response.use(
       originalRequest._retry = true;
 
       try {
-        const refreshToken = localStorage.getItem('refreshToken');
+        const refreshToken = sessionManager.getItem('refreshToken');
         if (refreshToken) {
           const response = await axios.post(
             `${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/auth/refresh-token`,
@@ -44,7 +54,7 @@ api.interceptors.response.use(
 
           if (response.data.success) {
             const { accessToken } = response.data.data;
-            localStorage.setItem('accessToken', accessToken);
+            sessionManager.setItem('accessToken', accessToken);
             
             // Update the authorization header and retry the original request
             api.defaults.headers.common['Authorization'] = `Bearer ${accessToken}`;
@@ -56,13 +66,22 @@ api.interceptors.response.use(
       } catch (refreshError) {
         console.error('Token refresh failed:', refreshError);
         
-        // Clear tokens and redirect to login
-        localStorage.removeItem('accessToken');
-        localStorage.removeItem('refreshToken');
-        localStorage.removeItem('userData');
-        localStorage.removeItem('userRole');
+        // Clear tokens and redirect to login (port-specific)
+        try {
+          sessionManager.clear();
+        } catch (clearError) {
+          console.warn('Error clearing session:', clearError);
+          // Fallback to manual cleanup
+          localStorage.removeItem('accessToken');
+          localStorage.removeItem('refreshToken');
+          localStorage.removeItem('userData');
+          localStorage.removeItem('userRole');
+        }
         
-  window.location.href = '/login';
+        // Only redirect to login if this was an authenticated request
+        if (originalRequest.headers.Authorization) {
+          window.location.href = '/login';
+        }
       }
     }
 

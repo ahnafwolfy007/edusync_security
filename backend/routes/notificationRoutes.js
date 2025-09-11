@@ -6,6 +6,9 @@ const notificationController = require('../controllers/notificationController');
 // All notification routes require auth
 router.use(authenticateToken);
 
+// Register FCM token
+router.post('/register-token', notificationController.registerFCMToken);
+
 // GET /api/notifications
 router.get('/', notificationController.getNotifications);
 

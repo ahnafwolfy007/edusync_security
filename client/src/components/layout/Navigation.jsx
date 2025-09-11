@@ -12,11 +12,13 @@ import {
   FiLogOut,
   FiSettings,
   FiSearch,
-  FiPlus
+  FiPlus,
+  FiMessageSquare
 } from 'react-icons/fi';
 import { useAuth } from '../../context/AuthContext';
 import { useWallet } from '../../context/WalletContext';
 import { useNotification } from '../../context/NotificationContext';
+import SessionSwitcher from '../SessionSwitcher';
 
 const Navigation = () => {
   const navigate = useNavigate();
@@ -34,8 +36,14 @@ const Navigation = () => {
     { path: '/dashboard', name: 'Dashboard', icon: FiHome },
     { path: '/business-marketplace', name: 'Businesses', icon: FiShoppingBag },
     { path: '/secondhand-market', name: 'Secondhand', icon: FiBookOpen },
+    { path: '/chat', name: 'Chat', icon: FiMessageSquare },
     { path: '/wallet', name: 'Wallet', icon: FiDollarSign }
   ];
+
+  // Append Admin link dynamically for elevated roles
+  const elevated = (user?.role_name || user?.role || '').toLowerCase();
+  const showAdmin = elevated === 'admin' || elevated === 'moderator';
+  const fullNavItems = showAdmin ? [...navItems, { path: '/admin', name: 'Admin', icon: FiSettings }] : navItems;
 
   const userMenuItems = [
     { path: '/profile', name: 'Profile', icon: FiUser },
@@ -90,7 +98,7 @@ const Navigation = () => {
 
           {/* Desktop Navigation */}
           <div className="hidden md:flex items-center space-x-1">
-            {navItems.map((item) => (
+            {fullNavItems.map((item) => (
               <Link
                 key={item.path}
                 to={item.path}
@@ -178,6 +186,9 @@ const Navigation = () => {
               )}
             </div>
 
+            {/* Session Switcher */}
+            <SessionSwitcher />
+
             {/* User Menu */}
             <div className="relative" ref={userMenuRef}>
               <button
@@ -219,6 +230,16 @@ const Navigation = () => {
                         <span>{item.name}</span>
                       </Link>
                     ))}
+                    {showAdmin && (
+                      <Link
+                        to="/admin"
+                        className="flex items-center space-x-2 px-4 py-2 text-sm text-blue-600 hover:bg-blue-50"
+                        onClick={() => setShowUserMenu(false)}
+                      >
+                        <FiSettings className="w-4 h-4" />
+                        <span>Admin Panel</span>
+                      </Link>
+                    )}
                   </div>
                   <div className="border-t border-gray-200 py-2">
                     <button
@@ -247,7 +268,7 @@ const Navigation = () => {
         {showMobileMenu && (
           <div className="md:hidden border-t border-gray-200 py-4">
             <div className="space-y-1">
-              {navItems.map((item) => (
+              {fullNavItems.map((item) => (
                 <Link
                   key={item.path}
                   to={item.path}

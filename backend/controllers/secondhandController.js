@@ -111,10 +111,76 @@ const getSecondhandItemById = async (req, res) => {
 
 const createSecondhandItem = async (req, res) => {
   try {
-    // Not implemented in this iteration
-    res.status(501).json({ success: false, message: 'Not implemented yet' });
+    const userId = req.user.userId;
+    const { item_name, description, price, condition, category_id, terms_conditions } = req.body;
+    const db = dbConfig.getDB();
+    
+    if (!item_name || !description || !price) {
+      return res.status(400).json({
+        success: false,
+        message: 'Item name, description, and price are required'
+      });
+    }
+
+    if (price <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Price must be greater than 0'
+      });
+    }
+
+    // Process uploaded images
+    let imageUrls = [];
+    if (req.files && req.files.length > 0) {
+      imageUrls = req.files.map(file => {
+        // Create relative URL path for the uploaded file
+        const relativePath = file.path.replace(/\\/g, '/').replace(/.*uploads\//, '/uploads/');
+        return relativePath;
+      });
+    }
+
+    // First, let's check if the images column exists, if not add it
+    try {
+      await db.query(`
+        ALTER TABLE secondhand_items 
+        ADD COLUMN IF NOT EXISTS images TEXT
+      `);
+    } catch (alterError) {
+      console.log('Images column might already exist:', alterError.message);
+    }
+
+    const query = `
+      INSERT INTO secondhand_items (
+        seller_id, item_name, description, price, condition, category_id, terms_conditions, images, posted_at, is_active
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), TRUE)
+      RETURNING *
+    `;
+
+    const values = [
+      userId,
+      item_name.trim(),
+      description.trim(),
+      parseFloat(price),
+      condition || 'good',
+      category_id || null,
+      terms_conditions || null,
+      JSON.stringify(imageUrls)
+    ];
+
+    const result = await db.query(query, values);
+    
+    res.status(201).json({
+      success: true,
+      message: 'Secondhand item created successfully',
+      data: result.rows[0]
+    });
   } catch (error) {
-    res.status(500).json({ success: false, message: 'Server error' });
+    console.error('Create secondhand item error:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Failed to create secondhand item',
+      error: error.message 
+    });
   }
 };
 

@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import api from '../api';
+import SessionManager from '../utils/SessionManager';
 
 const AuthContext = createContext();
 
@@ -15,16 +16,24 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [sessionManager] = useState(() => new SessionManager());
 
   // Check if user is authenticated on app load
   useEffect(() => {
-    const token = localStorage.getItem('accessToken');
-    const userData = localStorage.getItem('userData');
+    const token = sessionManager.getItem('accessToken');
+    const userData = sessionManager.getItem('userData');
     
     if (token && userData) {
       try {
         const parsedUser = JSON.parse(userData);
-        setUser(parsedUser);
+        const normalized = {
+          ...parsedUser,
+          role: parsedUser.role || parsedUser.role_name,
+          role_name: parsedUser.role_name || parsedUser.role,
+          name: parsedUser.full_name || parsedUser.fullName || parsedUser.name,
+          avatar: parsedUser.profile_picture || parsedUser.avatar
+        };
+        setUser(normalized);
         setIsAuthenticated(true);
         api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
       } catch (error) {
@@ -32,8 +41,11 @@ export const AuthProvider = ({ children }) => {
         logout();
       }
     }
+    
+    // Clean up expired sessions from other ports
+    sessionManager.cleanupExpiredSessions();
     setLoading(false);
-  }, []);
+  }, [sessionManager]);
 
   const login = async (email, password) => {
     const response = await api.post('/auth/login', { email, password });
@@ -44,11 +56,11 @@ export const AuthProvider = ({ children }) => {
 
     const { user: userData, accessToken, refreshToken } = response.data.data;
 
-    // Store tokens and user data
-    localStorage.setItem('accessToken', accessToken);
-    localStorage.setItem('refreshToken', refreshToken);
-    localStorage.setItem('userData', JSON.stringify(userData));
-    localStorage.setItem('userRole', userData.role_name || userData.role);
+    // Store tokens and user data with port-specific keys
+    sessionManager.setItem('accessToken', accessToken);
+    sessionManager.setItem('refreshToken', refreshToken);
+    sessionManager.setItem('userData', JSON.stringify(userData));
+    sessionManager.setItem('userRole', userData.role_name || userData.role);
 
     // Set default authorization header
     api.defaults.headers.common['Authorization'] = `Bearer ${accessToken}`;
@@ -86,11 +98,11 @@ export const AuthProvider = ({ children }) => {
       if (response.data.success) {
         const { user: newUser, accessToken, refreshToken } = response.data.data;
         
-        // Store tokens and user data
-        localStorage.setItem('accessToken', accessToken);
-        localStorage.setItem('refreshToken', refreshToken);
-        localStorage.setItem('userData', JSON.stringify(newUser));
-        localStorage.setItem('userRole', newUser.role_name || newUser.role);
+        // Store tokens and user data with port-specific keys
+        sessionManager.setItem('accessToken', accessToken);
+        sessionManager.setItem('refreshToken', refreshToken);
+        sessionManager.setItem('userData', JSON.stringify(newUser));
+        sessionManager.setItem('userRole', newUser.role_name || newUser.role);
         
         // Set default authorization header
         api.defaults.headers.common['Authorization'] = `Bearer ${accessToken}`;
@@ -119,11 +131,8 @@ export const AuthProvider = ({ children }) => {
     } catch (error) {
       console.error('Logout error:', error);
     } finally {
-      // Clear all stored data
-      localStorage.removeItem('accessToken');
-      localStorage.removeItem('refreshToken');
-      localStorage.removeItem('userData');
-      localStorage.removeItem('userRole');
+      // Clear all stored data for this port only
+      sessionManager.clear();
       
       // Remove authorization header
       delete api.defaults.headers.common['Authorization'];
@@ -141,12 +150,12 @@ export const AuthProvider = ({ children }) => {
       avatar: merged.profile_picture || merged.avatar
     };
     setUser(normalized);
-    localStorage.setItem('userData', JSON.stringify(normalized));
+    sessionManager.setItem('userData', JSON.stringify(normalized));
   };
 
   const refreshToken = async () => {
     try {
-      const refreshToken = localStorage.getItem('refreshToken');
+      const refreshToken = sessionManager.getItem('refreshToken');
       if (!refreshToken) {
         logout();
         return false;
@@ -156,7 +165,7 @@ export const AuthProvider = ({ children }) => {
       
       if (response.data.success) {
         const { accessToken } = response.data.data;
-        localStorage.setItem('accessToken', accessToken);
+        sessionManager.setItem('accessToken', accessToken);
         api.defaults.headers.common['Authorization'] = `Bearer ${accessToken}`;
         return true;
       }
@@ -168,6 +177,30 @@ export const AuthProvider = ({ children }) => {
       logout();
       return false;
     }
+  };
+
+  // Sync user profile (fetch latest role after admin approvals)
+  const syncProfile = async () => {
+    try {
+      const res = await api.get('/auth/profile');
+      const serverUser = res.data?.data?.user;
+      if (serverUser) {
+        const normalized = {
+          ...user,
+          ...serverUser,
+          role: serverUser.role_name || serverUser.role || user?.role,
+          role_name: serverUser.role_name || serverUser.role || user?.role_name,
+          name: serverUser.full_name || serverUser.fullName || user?.name,
+        };
+        setUser(normalized);
+        sessionManager.setItem('userData', JSON.stringify(normalized));
+        sessionManager.setItem('userRole', normalized.role_name || normalized.role);
+        return normalized;
+      }
+    } catch (e) {
+      console.warn('syncProfile failed', e.message);
+    }
+    return null;
   };
 
   const checkRole = (requiredRole) => {
@@ -200,10 +233,14 @@ export const AuthProvider = ({ children }) => {
     logout,
     updateUser,
     refreshToken,
+    syncProfile,
     checkRole,
     isAdmin,
     isModerator,
-    isBusinessOwner
+    isBusinessOwner,
+    sessionManager, // Expose session manager for debugging
+    getActiveSessions: () => sessionManager.getActiveSessions(),
+    switchToSession: (port) => sessionManager.switchToSession(port)
   };
 
   return (

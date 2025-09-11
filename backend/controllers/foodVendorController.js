@@ -93,6 +93,19 @@ class FoodVendorController {
     }
   }
 
+  // Get application history
+  async getApplicationHistory(req, res) {
+    try {
+      const userId = req.user.userId;
+      const db = dbConfig.db;
+      const { rows } = await db.query('SELECT * FROM food_vendor_applications WHERE user_id = $1 ORDER BY applied_at DESC LIMIT 20', [userId]);
+      res.json({ success:true, data:{ applications: rows } });
+    } catch (error) {
+      console.error('Get food vendor application history error:', error);
+      res.status(500).json({ success:false, message:'Internal server error'});
+    }
+  }
+
   // Create food vendor (after approval)
   async createFoodVendor(req, res) {
     try {

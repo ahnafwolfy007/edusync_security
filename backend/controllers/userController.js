@@ -308,6 +308,89 @@ class UserController {
         orders.food = foodOrdersResult.rows;
       }
 
+      // Seller-side (business owner) orders
+      if (type === 'all' || type === 'business') {
+        const ownedBizResult = await db.query('SELECT business_id, business_name FROM businesses WHERE owner_id = $1', [userId]);
+        if (ownedBizResult.rows.length) {
+          const businessIds = ownedBizResult.rows.map(r => r.business_id);
+          const placeholders = businessIds.map((_, i) => `$${i + 1}`).join(',');
+          const sellerOrdersQuery = `SELECT bo.*, b.business_name,
+             (SELECT json_agg(
+               json_build_object(
+                 'product_name', bp.product_name,
+                 'quantity', boi.quantity,
+                 'price', bp.price
+               )
+             ) FROM business_order_items boi
+             JOIN business_products bp ON boi.product_id = bp.product_id
+             WHERE boi.order_id = bo.order_id) as items
+             FROM business_orders bo
+             JOIN businesses b ON bo.business_id = b.business_id
+             WHERE bo.business_id IN (${placeholders})
+             ORDER BY bo.created_at DESC`;
+          const sellerOrdersResult = await db.query(sellerOrdersQuery, businessIds);
+          // Flag as seller side
+          orders.business_sales = sellerOrdersResult.rows.map(r => ({ ...r, is_seller: true }));
+        }
+      }
+
+      // Seller-side (food vendor) orders
+      if (type === 'all' || type === 'food') {
+        const vendorResult = await db.query('SELECT vendor_id, shop_name FROM food_vendors WHERE user_id = $1', [userId]);
+        if (vendorResult.rows.length) {
+          const vendorIds = vendorResult.rows.map(r => r.vendor_id);
+          const placeholders = vendorIds.map((_, i) => `$${i + 1}`).join(',');
+          const sellerFoodQuery = `SELECT fo.*, fv.shop_name,
+            (SELECT json_agg(
+              json_build_object(
+                'item_name', fi.item_name,
+                'quantity', foi.quantity,
+                'price', fi.price
+              )
+            ) FROM food_order_items foi
+            JOIN food_items fi ON foi.food_item_id = fi.food_item_id
+            WHERE foi.order_id = fo.order_id) as items
+            FROM food_orders fo
+            JOIN food_vendors fv ON fo.vendor_id = fv.vendor_id
+            WHERE fo.vendor_id IN (${placeholders})
+            ORDER BY COALESCE(fo.order_placed_at, fo.created_at) DESC`;
+          const sellerFoodResult = await db.query(sellerFoodQuery, vendorIds);
+            orders.food_sales = sellerFoodResult.rows.map(r => ({ ...r, is_seller: true }));
+        }
+      }
+
+      // Seller-side secondhand sales
+      if (type === 'all' || type === 'secondhand') {
+        const secondhandSalesResult = await db.query(
+          `SELECT so.*, si.item_name, si.price, u.full_name as buyer_name
+           FROM secondhand_orders so
+           JOIN secondhand_items si ON so.item_id = si.item_id
+           JOIN users u ON so.buyer_id = u.user_id
+           WHERE si.seller_id = $1
+           ORDER BY so.order_date DESC`,
+          [userId]
+        );
+        if (secondhandSalesResult.rows.length) {
+          orders.secondhand_sales = secondhandSalesResult.rows.map(r => ({ ...r, is_seller: true }));
+        }
+      }
+
+      // Seller-side rental bookings (as owner)
+      if (type === 'all' || type === 'rentals') {
+        const rentalSalesResult = await db.query(
+          `SELECT ro.*, rp.product_name, rp.rent_per_day, u.full_name as renter_name
+           FROM rental_orders ro
+           JOIN rental_products rp ON ro.rental_id = rp.rental_id
+           JOIN users u ON ro.renter_id = u.user_id
+           WHERE rp.owner_id = $1
+           ORDER BY ro.created_at DESC`,
+          [userId]
+        );
+        if (rentalSalesResult.rows.length) {
+          orders.rental_sales = rentalSalesResult.rows.map(r => ({ ...r, is_seller: true }));
+        }
+      }
+
       res.json({
         success: true,
         data: { orders }

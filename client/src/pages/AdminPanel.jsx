@@ -27,6 +27,7 @@ import {
 import api from '../api';
 import { useNotification } from '../context/NotificationContext';
 import { useAuth } from '../context/AuthContext';
+import AnalyticsOverview from '../components/admin/AnalyticsOverview';
 
 const AdminPanel = () => {
   const navigate = useNavigate();
@@ -35,35 +36,55 @@ const AdminPanel = () => {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('dashboard');
   const [stats, setStats] = useState({});
+  const [live, setLive] = useState(true); // enable SSE by default
+  const [lastUpdate, setLastUpdate] = useState(null);
   const [pendingApprovals, setPendingApprovals] = useState([]);
   const [users, setUsers] = useState([]);
   const [reports, setReports] = useState([]);
 
-  // Check if user is admin
+  // Allow admin or moderator (moderator has limited powers)
   useEffect(() => {
-    if (user && user.role !== 'admin') {
+    const normalizedRole = (user?.role_name || user?.role || '').toLowerCase();
+    if (user && normalizedRole !== 'admin' && normalizedRole !== 'moderator') {
       navigate('/dashboard');
-      showNotification('Access denied. Admin privileges required.', 'error');
+      showNotification('Access denied. Elevated privileges required.', 'error');
       return;
     }
-    fetchDashboardData();
+    if (user && (normalizedRole === 'admin' || normalizedRole === 'moderator')) {
+      fetchDashboardData();
+    }
   }, [user]);
 
   const fetchDashboardData = async () => {
     try {
       setLoading(true);
-      const [statsRes, businessAppsRes, foodVendorsRes, usersRes] = await Promise.all([
-        api.get('/admin/dashboard/stats'),
-        api.get('/admin/business-applications/pending'),
-        api.get('/admin/food-vendors/pending'),
-        api.get('/admin/users')
-      ]);
+      const requests = [
+        { key: 'stats', fn: () => api.get('/admin/dashboard/stats') },
+        { key: 'businessApps', fn: () => api.get('/admin/business-applications/pending') },
+        { key: 'foodVendors', fn: () => api.get('/admin/food-vendors/pending') },
+        { key: 'users', fn: () => api.get('/admin/users') }
+      ];
 
-      // Map stats
-      setStats(statsRes?.data?.data?.stats || {});
+      const settled = await Promise.allSettled(requests.map(r => r.fn()));
+      const responseMap = {};
+      settled.forEach((res, idx) => {
+        const key = requests[idx].key;
+        if (res.status === 'fulfilled') {
+          responseMap[key] = res.value;
+        } else {
+          console.warn(`AdminPanel: ${key} load failed`, res.reason?.response?.status, res.reason?.message);
+        }
+      });
 
-      // Combine pending approvals with normalized shape
-      const businessApprovals = (businessAppsRes?.data?.data || []).map(a => ({
+      // Stats
+      if (responseMap.stats?.data?.success) {
+        const rawStats = responseMap.stats.data.data?.stats || {};
+        const activities = responseMap.stats.data.data?.recentActivities || responseMap.stats.data.data?.recent_activities || [];
+        setStats(s => ({ ...rawStats, recentActivity: activities }));
+      }
+
+      // Approvals
+      const businessApprovals = (responseMap.businessApps?.data?.data || []).map(a => ({
         type: 'business',
         id: a.application_id,
         title: a.business_name,
@@ -71,7 +92,7 @@ const AdminPanel = () => {
         created_at: a.applied_at,
         status: a.status
       }));
-      const vendorApprovals = (foodVendorsRes?.data?.data || []).map(v => ({
+      const vendorApprovals = (responseMap.foodVendors?.data?.data || []).map(v => ({
         type: 'food_vendor',
         id: v.vendor_id,
         title: v.shop_name,
@@ -81,25 +102,58 @@ const AdminPanel = () => {
       }));
       setPendingApprovals([...businessApprovals, ...vendorApprovals]);
 
-      // Map users to expected shape
-      const rawUsers = usersRes?.data?.data?.users || [];
-      const mappedUsers = rawUsers.map(u => ({
-        id: u.user_id,
-        full_name: u.full_name,
-        email: u.email,
-        role: u.role_name,
-        is_active: true,
-        created_at: u.created_at
-      }));
-      setUsers(mappedUsers);
+      // Users
+      if (responseMap.users?.data?.success) {
+        const rawUsers = responseMap.users.data.data?.users || [];
+        setUsers(rawUsers.map(u => ({
+          id: u.user_id,
+          full_name: u.full_name,
+          email: u.email,
+          role: u.role_name,
+          is_active: true,
+          created_at: u.created_at
+        })));
+      }
       setReports([]);
+
+      // If every request failed, throw to show notification
+      if (Object.keys(responseMap).length === 0) {
+        throw new Error('All admin data requests failed');
+      }
     } catch (error) {
       console.error('Error fetching admin data:', error);
-      showNotification('Error loading admin data', 'error');
+      showNotification(error?.message || 'Error loading admin data', 'error');
     } finally {
       setLoading(false);
     }
   };
+
+  // Live stats via SSE (fallback to polling if disabled)
+  useEffect(() => {
+    if (activeTab !== 'dashboard') return; // only when on dashboard tab
+    let es; let poll;
+    const token = localStorage.getItem('accessToken');
+    const base = (import.meta.env.VITE_API_BASE_URL || '/api').replace(/\/$/, '');
+    if (live && token) {
+      try {
+        es = new EventSource(`${base}/admin/dashboard/stats/stream?token=${token}`);
+        es.addEventListener('stats', (e) => {
+          try {
+            const payload = JSON.parse(e.data);
+            setStats((prev) => ({ ...prev, live: payload.stats }));
+            setLastUpdate(new Date());
+          } catch {/* ignore */}
+        });
+        es.onerror = () => {
+          es.close();
+        };
+      } catch {/* ignore */}
+    } else if (!live) {
+      // Polling every 15s
+      poll = setInterval(() => { fetchDashboardData(); setLastUpdate(new Date()); }, 15000);
+    }
+    return () => { es && es.close(); poll && clearInterval(poll); };
+  }, [live, activeTab]);
 
   const handleApproval = async (id, type, action) => {
     try {
@@ -148,7 +202,7 @@ const AdminPanel = () => {
             <div className="ml-4">
               <p className="text-sm font-medium text-gray-600">Total Users</p>
               <p className="text-2xl font-semibold text-gray-900">
-                {stats.totalUsers?.toLocaleString() || 0}
+                {(stats.live?.total_users || stats.totalUsers || 0).toLocaleString()}
               </p>
             </div>
           </div>
@@ -162,7 +216,7 @@ const AdminPanel = () => {
             <div className="ml-4">
               <p className="text-sm font-medium text-gray-600">Total Revenue</p>
               <p className="text-2xl font-semibold text-gray-900">
-                ৳{stats.totalRevenue?.toLocaleString() || 0}
+                ৳{(stats.live?.monthly_transaction_volume || stats.totalRevenue || 0).toLocaleString()}
               </p>
             </div>
           </div>
@@ -176,7 +230,7 @@ const AdminPanel = () => {
             <div className="ml-4">
               <p className="text-sm font-medium text-gray-600">Pending Approvals</p>
               <p className="text-2xl font-semibold text-gray-900">
-                {pendingApprovals.length}
+                {(stats.live?.pending_business_applications || pendingApprovals.length || 0)}
               </p>
             </div>
           </div>
@@ -199,8 +253,13 @@ const AdminPanel = () => {
 
       {/* Recent Activity */}
       <div className="bg-white rounded-lg shadow">
-        <div className="px-6 py-4 border-b border-gray-200">
+        <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
           <h3 className="text-lg font-medium text-gray-900">Recent Activity</h3>
+          <div className="flex items-center space-x-3 text-xs">
+            <span className="text-gray-500">Live:</span>
+            <button type="button" onClick={() => setLive(l => !l)} className={`px-2 py-1 rounded border ${live ? 'bg-green-100 border-green-400 text-green-700' : 'bg-gray-100 border-gray-300 text-gray-600'}`}>{live ? 'ON' : 'OFF'}</button>
+            {lastUpdate && <span className="text-gray-400">{`Updated ${lastUpdate.toLocaleTimeString()}`}</span>}
+          </div>
         </div>
         <div className="p-6">
           <div className="space-y-4">
@@ -220,6 +279,9 @@ const AdminPanel = () => {
           </div>
         </div>
       </div>
+
+  {/* Analytics Charts */}
+  <AnalyticsOverview days={14} />
     </div>
   );
 
@@ -536,13 +598,14 @@ const AdminPanel = () => {
     </div>
   );
 
-  if (!user || user.role !== 'admin') {
+  const normalizedRole = (user?.role_name || user?.role || '').toLowerCase();
+  if (!user || (normalizedRole !== 'admin' && normalizedRole !== 'moderator')) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <FiShield className="w-12 h-12 text-gray-400 mx-auto mb-4" />
           <h3 className="text-lg font-medium text-gray-900 mb-2">Access Denied</h3>
-          <p className="text-gray-600">You need admin privileges to access this page.</p>
+          <p className="text-gray-600">You need moderator or admin privileges to access this page.</p>
         </div>
       </div>
     );
@@ -556,14 +619,12 @@ const AdminPanel = () => {
           <div className="py-6">
             <div className="flex items-center justify-between">
               <div>
-                <h1 className="text-3xl font-bold text-gray-900">Admin Panel</h1>
-                <p className="text-gray-600 mt-1">
-                  Manage your EduSync platform
-                </p>
+                <h1 className="text-3xl font-bold text-gray-900">{normalizedRole === 'moderator' ? 'Moderator Console' : 'Admin Panel'}</h1>
+                <p className="text-gray-600 mt-1">Manage your EduSync platform</p>
               </div>
               <div className="flex items-center space-x-4">
                 <FiShield className="w-6 h-6 text-blue-600" />
-                <span className="text-sm font-medium text-blue-600">Admin Access</span>
+                <span className="text-sm font-medium text-blue-600">{normalizedRole === 'moderator' ? 'Moderator Access' : 'Admin Access'}</span>
               </div>
             </div>
           </div>
@@ -606,9 +667,9 @@ const AdminPanel = () => {
           <>
             {activeTab === 'dashboard' && <DashboardTab />}
             {activeTab === 'approvals' && <ApprovalsTab />}
-            {activeTab === 'users' && <UsersTab />}
-            {activeTab === 'reports' && <ReportsTab />}
-            {activeTab === 'settings' && <SettingsTab />}
+            {activeTab === 'users' && normalizedRole === 'admin' && <UsersTab />}
+            {activeTab === 'reports' && normalizedRole === 'admin' && <ReportsTab />}
+            {activeTab === 'settings' && normalizedRole === 'admin' && <SettingsTab />}
           </>
         )}
       </div>

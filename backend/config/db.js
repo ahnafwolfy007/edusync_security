@@ -40,8 +40,8 @@ class Database {
   async initializeDatabase() {
     try {
       await this.testConnection();
-      await this.createTables();
-      await this.seedInitialData();
+  await this.createTables();
+  // Seeding removed per cleanup request; ensure roles/categories present via idempotent creation
       console.log('✅ Database initialized successfully');
     } catch (error) {
       console.error('❌ Database initialization failed:', error);
@@ -54,11 +54,11 @@ class Database {
     const client = await this.pool.connect();
     
     try {
-      // Temporarily disable single transaction to surface first failing statement
+      // Lightweight migration logger (no manual transaction to avoid COMMIT/ROLLBACK errors)
       const originalQuery = client.query.bind(client);
       client.query = async (text, params) => {
         const preview = (text || '').toString().split('\n').map(l=>l.trim()).filter(Boolean)[0];
-        console.log('[MIGRATION]', preview);
+        if (preview) console.log('[MIGRATION]', preview);
         try {
           return await originalQuery(text, params);
         } catch (err) {
@@ -254,12 +254,43 @@ class Database {
       await client.query(`
         CREATE TABLE IF NOT EXISTS food_vendors (
           vendor_id SERIAL PRIMARY KEY,
-          user_id INT NOT NULL REFERENCES users(user_id),
-          shop_name VARCHAR(150) NOT NULL,
+          owner_id INT NOT NULL REFERENCES users(user_id),
+          restaurant_name VARCHAR(150),
+          shop_name VARCHAR(150),
+          cuisine VARCHAR(100),
+          address TEXT,
+          phone VARCHAR(30),
           description TEXT,
+          operating_hours TEXT,
+          delivery_areas JSONB,
+          minimum_order DECIMAL(12,2) DEFAULT 0,
           is_verified BOOLEAN DEFAULT FALSE,
+            is_active BOOLEAN DEFAULT TRUE,
+          created_at TIMESTAMP DEFAULT NOW(),
+          updated_at TIMESTAMP DEFAULT NOW()
+        )
+      `);
+
+      // Ensure backward compatibility columns
+      await client.query(`ALTER TABLE food_vendors ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE`);
+      await client.query(`ALTER TABLE food_vendors ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW()`);
+
+      // Food vendor applications table (for approval workflow)
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS food_vendor_applications (
+          application_id SERIAL PRIMARY KEY,
+          user_id INT NOT NULL REFERENCES users(user_id),
+          restaurant_name VARCHAR(150) NOT NULL,
+          cuisine VARCHAR(100) NOT NULL,
+          address TEXT NOT NULL,
+          phone VARCHAR(30) NOT NULL,
+          license_info TEXT,
+          operating_hours TEXT,
+          delivery_areas JSONB,
+          status VARCHAR(20) DEFAULT 'pending',
           applied_at TIMESTAMP DEFAULT NOW(),
-          verified_at TIMESTAMP
+          reviewed_at TIMESTAMP,
+          review_comments TEXT
         )
       `);
 
@@ -290,13 +321,28 @@ class Database {
       await client.query(`
         CREATE TABLE IF NOT EXISTS food_orders (
           order_id SERIAL PRIMARY KEY,
-          user_id INT NOT NULL REFERENCES users(user_id),
-          vendor_id INT NOT NULL REFERENCES food_vendors(vendor_id),
-          order_date DATE NOT NULL CHECK (order_date <= NOW() + INTERVAL '7 days'),
-          order_placed_at TIMESTAMP DEFAULT NOW(),
-          status VARCHAR(20) NOT NULL DEFAULT 'pending'
+      user_id INT NOT NULL REFERENCES users(user_id),
+      vendor_id INT NOT NULL REFERENCES food_vendors(vendor_id),
+      total_amount DECIMAL(12,2) DEFAULT 0,
+      order_date DATE NOT NULL DEFAULT CURRENT_DATE,
+      created_at TIMESTAMP DEFAULT NOW(),
+      status VARCHAR(20) NOT NULL DEFAULT 'pending',
+      rating INT,
+      review TEXT,
+      reviewed_at TIMESTAMP,
+      estimated_delivery_time TIMESTAMP,
+      delivered_at TIMESTAMP
         )
       `);
+
+    // Add missing columns if legacy rows exist
+    await client.query(`ALTER TABLE food_orders ADD COLUMN IF NOT EXISTS total_amount DECIMAL(12,2) DEFAULT 0`);
+    await client.query(`ALTER TABLE food_orders ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT NOW()`);
+    await client.query(`ALTER TABLE food_orders ADD COLUMN IF NOT EXISTS rating INT`);
+    await client.query(`ALTER TABLE food_orders ADD COLUMN IF NOT EXISTS review TEXT`);
+    await client.query(`ALTER TABLE food_orders ADD COLUMN IF NOT EXISTS reviewed_at TIMESTAMP`);
+    await client.query(`ALTER TABLE food_orders ADD COLUMN IF NOT EXISTS estimated_delivery_time TIMESTAMP`);
+    await client.query(`ALTER TABLE food_orders ADD COLUMN IF NOT EXISTS delivered_at TIMESTAMP`);
 
       // Create FOOD_ORDER_ITEMS table
       await client.query(`
@@ -381,6 +427,35 @@ class Database {
           category VARCHAR(100),
           is_pinned BOOLEAN DEFAULT FALSE,
           created_at TIMESTAMP DEFAULT NOW()
+        )
+      `);
+
+      // Create JOBS table (was referenced elsewhere but not yet created)
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS jobs (
+          job_id SERIAL PRIMARY KEY,
+          user_id INT NOT NULL REFERENCES users(user_id),
+          title VARCHAR(150) NOT NULL,
+          description TEXT,
+          location VARCHAR(150),
+          job_type VARCHAR(50),
+          salary_range VARCHAR(100),
+          is_active BOOLEAN DEFAULT TRUE,
+          created_at TIMESTAMP DEFAULT NOW(),
+          updated_at TIMESTAMP DEFAULT NOW()
+        )
+      `);
+
+      // Create JOB APPLICATIONS table
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS job_applications (
+          application_id SERIAL PRIMARY KEY,
+          job_id INT NOT NULL REFERENCES jobs(job_id) ON DELETE CASCADE,
+          applicant_id INT NOT NULL REFERENCES users(user_id),
+          cover_letter TEXT,
+          status VARCHAR(20) DEFAULT 'pending',
+          applied_at TIMESTAMP DEFAULT NOW(),
+          UNIQUE(job_id, applicant_id)
         )
       `);
 
@@ -550,65 +625,25 @@ class Database {
       await client.query('CREATE INDEX IF NOT EXISTS idx_chats_participants ON chats(seller_id, buyer_id)');
       await client.query('CREATE INDEX IF NOT EXISTS idx_chat_messages_chat ON chat_messages(chat_id)');
 
-      await client.query('COMMIT');
-      console.log('✅ All tables created successfully');
+      // FCM Tokens table for push notifications
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS user_fcm_tokens (
+          user_id INT PRIMARY KEY REFERENCES users(user_id) ON DELETE CASCADE,
+          fcm_token TEXT NOT NULL,
+          updated_at TIMESTAMP DEFAULT NOW()
+        )
+      `);
+
+  console.log('✅ All tables ensured successfully');
     } catch (error) {
-      await client.query('ROLLBACK');
-      console.error('❌ Error creating tables:', error);
-      throw error;
+  // Do not rethrow to avoid crashing server; migrations are best-effort
+  console.error('❌ Error ensuring tables (continuing in degraded mode):', error.message);
     } finally {
       client.release();
     }
   }
 
-  // Seed initial data
-  async seedInitialData() {
-    const client = await this.pool.connect();
-    
-    try {
-      // Check if roles already exist
-      const rolesResult = await client.query('SELECT COUNT(*) FROM roles');
-      if (parseInt(rolesResult.rows[0].count) === 0) {
-        // Insert default roles
-        await client.query(`
-          INSERT INTO roles (role_name) VALUES 
-          ('admin'),
-          ('moderator'),
-          ('student'),
-          ('business_owner'),
-          ('food_vendor')
-        `);
-
-        // Insert default categories
-        await client.query(`
-          INSERT INTO categories (category_name, category_type) VALUES 
-          ('Electronics', 'secondhand'),
-          ('Books', 'secondhand'),
-          ('Clothing', 'secondhand'),
-          ('Furniture', 'secondhand'),
-          ('Sports Equipment', 'secondhand'),
-          ('Laptops & Computers', 'rental'),
-          ('Books & Study Materials', 'rental'),
-          ('Accommodation', 'rental'),
-          ('Vehicles', 'rental'),
-          ('Party & Events', 'rental'),
-          ('Lost Items', 'lost_found'),
-          ('Found Items', 'lost_found'),
-          ('Academic', 'notices'),
-          ('Events', 'notices'),
-          ('Administration', 'notices'),
-          ('Lost & Found', 'notices')
-        `);
-
-        console.log('✅ Initial data seeded successfully');
-      }
-    } catch (error) {
-      console.error('❌ Error seeding initial data:', error);
-      throw error;
-    } finally {
-      client.release();
-    }
-  }
+  // (Seeding function removed)
 
   // Generic query method
   async query(text, params) {

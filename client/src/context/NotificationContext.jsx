@@ -1,4 +1,6 @@
-import React, { createContext, useContext, useState, useCallback } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
+import { requestNotificationPermission, onForegroundMessage } from '../firebase';
+import { useAuth } from './AuthContext';
 
 const NotificationContext = createContext();
 
@@ -12,6 +14,95 @@ export const useNotification = () => {
 
 export const NotificationProvider = ({ children }) => {
   const [notifications, setNotifications] = useState([]);
+  const [fcmToken, setFcmToken] = useState(null);
+  const [fcmPermission, setFcmPermission] = useState(Notification.permission);
+  const { user } = useAuth();
+
+  // Initialize FCM when user is available
+  useEffect(() => {
+    if (user && fcmPermission === 'default') {
+      initializeFCM();
+    }
+  }, [user, fcmPermission]);
+
+  // Set up foreground message listener
+  useEffect(() => {
+    if (fcmToken) {
+      const unsubscribe = onForegroundMessage((payload) => {
+        console.log('FCM foreground message received:', payload);
+        
+        // Show as UI notification
+        addNotification({
+          type: 'info',
+          title: payload.notification?.title || 'New Message',
+          message: payload.notification?.body || 'You have a new notification',
+          duration: 8000,
+          data: payload.data
+        });
+      });
+
+      return unsubscribe;
+    }
+  }, [fcmToken]);
+
+  const initializeFCM = async () => {
+    try {
+      const token = await requestNotificationPermission();
+      if (token) {
+        setFcmToken(token);
+        setFcmPermission('granted');
+        
+        // Send token to backend
+        await sendTokenToBackend(token);
+        
+        console.log('FCM initialized successfully with token:', token);
+      } else {
+        setFcmPermission('denied');
+        console.log('FCM permission denied');
+      }
+    } catch (error) {
+      console.error('FCM initialization failed:', error);
+    }
+  };
+
+  const sendTokenToBackend = async (token) => {
+    try {
+      const response = await fetch('/api/notifications/register-token', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify({ fcmToken: token })
+      });
+
+      if (response.ok) {
+        console.log('FCM token registered with backend');
+      } else {
+        console.error('Failed to register FCM token with backend');
+      }
+    } catch (error) {
+      console.error('Error sending FCM token to backend:', error);
+    }
+  };
+
+  const requestFCMPermission = async () => {
+    const token = await requestNotificationPermission();
+    if (token) {
+      setFcmToken(token);
+      setFcmPermission('granted');
+      await sendTokenToBackend(token);
+      
+      // Show success notification
+      addNotification({
+        type: 'success',
+        title: 'Notifications Enabled',
+        message: 'You will now receive push notifications',
+        duration: 5000
+      });
+    }
+    return token;
+  };
 
   const addNotification = useCallback((notification) => {
     const id = Date.now() + Math.random();
@@ -104,8 +195,13 @@ export const NotificationProvider = ({ children }) => {
     showSuccess,
     showError,
     showWarning,
-  showInfo,
-  showNotification
+    showInfo,
+    showNotification,
+    // FCM related
+    fcmToken,
+    fcmPermission,
+    initializeFCM,
+    requestFCMPermission
   };
 
   return (

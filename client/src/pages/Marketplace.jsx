@@ -3,6 +3,9 @@ import { useAuth } from '../context/AuthContext';
 import { useWallet } from '../context/WalletContext';
 import { useNotification } from '../context/NotificationContext';
 import api from '../api';
+import ItemUploadForm from '../components/marketplace/ItemUploadForm';
+import SellItemPrompt from '../components/marketplace/SellItemPrompt';
+import MarketplaceItemCard from '../components/marketplace/MarketplaceItemCard';
 
 const Marketplace = () => {
   const { user } = useAuth();
@@ -18,14 +21,6 @@ const Marketplace = () => {
   
   // Post item modal state
   const [showPostModal, setShowPostModal] = useState(false);
-  const [newItem, setNewItem] = useState({
-    title: '',
-    description: '',
-    price: '',
-    category: 'books',
-    condition: 'new',
-    images: []
-  });
   
   // Buy item modal state
   const [showBuyModal, setShowBuyModal] = useState(false);
@@ -71,43 +66,6 @@ const Marketplace = () => {
       }
     } catch (error) {
       console.error('Failed to fetch user items:', error);
-    }
-  };
-
-  const handlePostItem = async (e) => {
-    e.preventDefault();
-    
-    if (!newItem.title || !newItem.description || !newItem.price) {
-      showError('Please fill in all required fields');
-      return;
-    }
-
-    try {
-      setLoading(true);
-      const response = await api.post('/marketplace/items', {
-        ...newItem,
-        price: parseFloat(newItem.price)
-      });
-      
-      if (response.data.success) {
-        showSuccess('Item posted successfully!');
-        setShowPostModal(false);
-        setNewItem({
-          title: '',
-          description: '',
-          price: '',
-          category: 'books',
-          condition: 'new',
-          images: []
-        });
-        fetchMarketplaceItems();
-        fetchUserItems();
-      }
-    } catch (error) {
-      console.error('Failed to post item:', error);
-      showError(error.response?.data?.message || 'Failed to post item');
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -161,13 +119,17 @@ const Marketplace = () => {
             </div>
             {user && (
               <button
-                onClick={() => setShowPostModal(true)}
-                className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition duration-200"
+                onClick={() => {
+                  console.log('Sell item button clicked, user:', user);
+                  console.log('Setting showPostModal to true');
+                  setShowPostModal(true);
+                }}
+                className="inline-flex items-center px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl hover:from-blue-700 hover:to-purple-700 transition-all duration-200 transform hover:scale-105 shadow-lg"
               >
                 <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
                   <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />
                 </svg>
-                Post Item
+                Sell Item
               </button>
             )}
           </div>
@@ -246,63 +208,15 @@ const Marketplace = () => {
             ) : filteredItems.length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                 {filteredItems.map(item => (
-                  <div key={item.id} className="bg-white rounded-lg shadow-sm border overflow-hidden hover:shadow-md transition duration-200">
-                    <div className="aspect-w-1 aspect-h-1 bg-gray-200">
-                      {item.images && item.images.length > 0 ? (
-                        <img
-                          src={item.images[0]}
-                          alt={item.title}
-                          className="w-full h-48 object-cover"
-                        />
-                      ) : (
-                        <div className="w-full h-48 bg-gray-200 flex items-center justify-center">
-                          <svg className="w-12 h-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                          </svg>
-                        </div>
-                      )}
-                    </div>
-                    
-                    <div className="p-4">
-                      <div className="flex items-start justify-between mb-2">
-                        <h3 className="text-lg font-semibold text-gray-900 truncate">{item.title}</h3>
-                        <span className="text-sm text-gray-500 bg-gray-100 px-2 py-1 rounded-full ml-2 whitespace-nowrap">
-                          {categories.find(c => c.value === item.category)?.icon} {item.category}
-                        </span>
-                      </div>
-                      
-                      <p className="text-gray-600 text-sm mb-3 line-clamp-2">{item.description}</p>
-                      
-                      <div className="flex items-center justify-between mb-3">
-                        <span className="text-2xl font-bold text-blue-600">৳{item.price}</span>
-                        <span className={`text-xs px-2 py-1 rounded-full ${
-                          item.condition === 'new' ? 'bg-green-100 text-green-800' :
-                          item.condition === 'like-new' ? 'bg-blue-100 text-blue-800' :
-                          item.condition === 'good' ? 'bg-yellow-100 text-yellow-800' :
-                          'bg-gray-100 text-gray-800'
-                        }`}>
-                          {item.condition}
-                        </span>
-                      </div>
-                      
-                      <div className="flex items-center justify-between text-sm text-gray-500 mb-4">
-                        <span>By {item.seller_name}</span>
-                        <span>{new Date(item.created_at).toLocaleDateString()}</span>
-                      </div>
-                      
-                      {user && user.id !== item.seller_id && (
-                        <button
-                          onClick={() => {
-                            setSelectedItem(item);
-                            setShowBuyModal(true);
-                          }}
-                          className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 transition duration-200"
-                        >
-                          Buy Now
-                        </button>
-                      )}
-                    </div>
-                  </div>
+                  <MarketplaceItemCard
+                    key={item.id}
+                    item={item}
+                    onBuy={(item) => {
+                      setSelectedItem(item);
+                      setShowBuyModal(true);
+                    }}
+                    showBuyButton={user && user.id !== item.seller_id}
+                  />
                 ))}
               </div>
             ) : (
@@ -323,172 +237,35 @@ const Marketplace = () => {
             {userItems.length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {userItems.map(item => (
-                  <div key={item.id} className="bg-white rounded-lg shadow-sm border overflow-hidden">
-                    <div className="aspect-w-1 aspect-h-1 bg-gray-200">
-                      {item.images && item.images.length > 0 ? (
-                        <img
-                          src={item.images[0]}
-                          alt={item.title}
-                          className="w-full h-48 object-cover"
-                        />
-                      ) : (
-                        <div className="w-full h-48 bg-gray-200 flex items-center justify-center">
-                          <svg className="w-12 h-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                          </svg>
-                        </div>
-                      )}
-                    </div>
-                    
-                    <div className="p-4">
-                      <h3 className="text-lg font-semibold text-gray-900 mb-2">{item.title}</h3>
-                      <p className="text-gray-600 text-sm mb-3 line-clamp-2">{item.description}</p>
-                      
-                      <div className="flex items-center justify-between mb-3">
-                        <span className="text-xl font-bold text-blue-600">৳{item.price}</span>
-                        <span className={`text-xs px-2 py-1 rounded-full ${
-                          item.status === 'available' ? 'bg-green-100 text-green-800' :
-                          item.status === 'sold' ? 'bg-red-100 text-red-800' :
-                          'bg-yellow-100 text-yellow-800'
-                        }`}>
-                          {item.status}
-                        </span>
-                      </div>
-                      
-                      <div className="text-sm text-gray-500">
-                        Posted on {new Date(item.created_at).toLocaleDateString()}
-                      </div>
-                    </div>
-                  </div>
+                  <MarketplaceItemCard
+                    key={item.id}
+                    item={item}
+                    isOwner={true}
+                    showBuyButton={false}
+                  />
                 ))}
               </div>
             ) : (
-              <div className="text-center py-12">
-                <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-                </svg>
-                <h3 className="mt-2 text-sm font-medium text-gray-900">No items posted</h3>
-                <p className="mt-1 text-sm text-gray-500">Start by posting your first item for sale.</p>
-                <button
-                  onClick={() => setShowPostModal(true)}
-                  className="mt-4 inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition duration-200"
-                >
-                  Post Your First Item
-                </button>
-              </div>
+              <SellItemPrompt onStartSelling={() => setShowPostModal(true)} />
             )}
           </div>
         )}
       </div>
 
-      {/* Post Item Modal */}
-      {showPostModal && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-          <div className="relative top-10 mx-auto p-5 border w-full max-w-2xl shadow-lg rounded-md bg-white">
-            <div className="mt-3">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-medium text-gray-900">Post New Item</h3>
-                <button
-                  onClick={() => setShowPostModal(false)}
-                  className="text-gray-400 hover:text-gray-600"
-                >
-                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-
-              <form onSubmit={handlePostItem} className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Title</label>
-                  <input
-                    type="text"
-                    value={newItem.title}
-                    onChange={(e) => setNewItem(prev => ({ ...prev, title: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="Enter item title"
-                    required
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
-                  <textarea
-                    value={newItem.description}
-                    onChange={(e) => setNewItem(prev => ({ ...prev, description: e.target.value }))}
-                    rows={4}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="Describe your item"
-                    required
-                  />
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Price (৳)</label>
-                    <input
-                      type="number"
-                      min="1"
-                      step="0.01"
-                      value={newItem.price}
-                      onChange={(e) => setNewItem(prev => ({ ...prev, price: e.target.value }))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                      placeholder="0.00"
-                      required
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Category</label>
-                    <select
-                      value={newItem.category}
-                      onChange={(e) => setNewItem(prev => ({ ...prev, category: e.target.value }))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                    >
-                      {categories.filter(c => c.value !== 'all').map(category => (
-                        <option key={category.value} value={category.value}>
-                          {category.label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Condition</label>
-                    <select
-                      value={newItem.condition}
-                      onChange={(e) => setNewItem(prev => ({ ...prev, condition: e.target.value }))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                    >
-                      <option value="new">New</option>
-                      <option value="like-new">Like New</option>
-                      <option value="good">Good</option>
-                      <option value="fair">Fair</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div className="flex justify-end space-x-3 pt-4">
-                  <button
-                    type="button"
-                    onClick={() => setShowPostModal(false)}
-                    className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={loading}
-                    className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50"
-                  >
-                    {loading ? 'Posting...' : 'Post Item'}
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Enhanced Item Upload Form */}
+      {console.log('Rendering ItemUploadForm with showPostModal:', showPostModal)}
+      <ItemUploadForm
+        isOpen={showPostModal}
+        onClose={() => {
+          console.log('Closing modal');
+          setShowPostModal(false);
+        }}
+        onSuccess={() => {
+          console.log('Upload success');
+          fetchMarketplaceItems();
+          fetchUserItems();
+        }}
+      />
 
       {/* Buy Item Modal */}
       {showBuyModal && selectedItem && (

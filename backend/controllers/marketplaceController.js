@@ -119,7 +119,7 @@ class MarketplaceController {
   async createItem(req, res) {
     try {
       const userId = req.user.userId;
-      const { title, description, price, category, condition, images = [] } = req.body;
+      const { title, description, price, category, condition, location, tags } = req.body;
       const db = dbConfig.db;
       
       if (!title || !description || !price || !category) {
@@ -136,10 +136,31 @@ class MarketplaceController {
         });
       }
       
+      // Process uploaded images
+      let imageUrls = [];
+      if (req.files && req.files.length > 0) {
+        imageUrls = req.files.map(file => {
+          // Create relative URL path for the uploaded file
+          const relativePath = file.path.replace(/\\/g, '/').replace(/.*uploads\//, '/uploads/');
+          return relativePath;
+        });
+      }
+      
+      // Process tags if provided
+      let tagsArray = [];
+      if (tags) {
+        try {
+          tagsArray = Array.isArray(tags) ? tags : JSON.parse(tags);
+        } catch (err) {
+          // If JSON parsing fails, treat as comma-separated string
+          tagsArray = typeof tags === 'string' ? tags.split(',').map(tag => tag.trim()) : [];
+        }
+      }
+      
       const query = `
         INSERT INTO marketplace_items (
-          seller_id, title, description, price, category, condition, images, status, created_at, updated_at
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'available', NOW(), NOW())
+          seller_id, title, description, price, category, condition, images, location, tags, status, created_at, updated_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'available', NOW(), NOW())
         RETURNING *
       `;
       
@@ -150,7 +171,9 @@ class MarketplaceController {
         parseFloat(price),
         category,
         condition || 'good',
-        JSON.stringify(images)
+        JSON.stringify(imageUrls),
+        location || null,
+        JSON.stringify(tagsArray)
       ];
       
       const result = await db.query(query, values);

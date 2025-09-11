@@ -4,6 +4,7 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { WalletProvider } from './context/WalletContext';
 import { NotificationProvider } from './context/NotificationContext';
 import { CartProvider } from './context/CartContext';
+import { ChatProvider } from './context/ChatContext';
 import ErrorBoundary from './components/common/ErrorBoundary';
 
 // Import layout components
@@ -13,6 +14,11 @@ import Navigation from './components/layout/Navigation';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
+import LostFound from './pages/LostFound';
+import NoticesBoard from './pages/NoticesBoard';
+import JobsBoard from './pages/JobsBoard';
+import Tutoring from './pages/Tutoring';
+import Chat from './pages/Chat';
 import BusinessMarketplace from './pages/BusinessMarketplace';
 import BusinessShopDetails from './pages/BusinessShopDetails';
 import SecondhandMarket from './pages/SecondhandMarket';
@@ -29,6 +35,14 @@ import AdminPanel from './pages/AdminPanel';
 import Cart from './pages/Cart';
 import Wallet from './pages/Wallet';
 import Profile from './pages/Profile';
+import BusinessProducts from './pages/BusinessProducts';
+import BusinessOrders from './pages/BusinessOrders';
+import VendorMenu from './pages/VendorMenu';
+import VendorOrders from './pages/VendorOrders';
+import BusinessApply from './pages/BusinessApply';
+import FoodVendorApply from './pages/FoodVendorApply';
+import ForgotPassword from './components/ForgotPassword';
+// import ResetPassword from './pages/ResetPassword'; // Removed - using OTP flow instead
 
 // Protected Route Component
 const ProtectedRoute = ({ children }) => {
@@ -69,8 +83,9 @@ const AdminRoute = ({ children }) => {
   if (!user) {
     return <Navigate to="/login" replace />;
   }
-  
-  if (user.role !== 'admin' && user.role !== 'moderator') {
+
+  const role = (user.role_name || user.role || '').toLowerCase();
+  if (role !== 'admin' && role !== 'moderator') {
     return <Navigate to="/dashboard" replace />;
   }
   
@@ -101,6 +116,13 @@ const PublicRoute = ({ children }) => {
   return children;
 };
 
+// Unified dashboard wrapper (all roles see the same base dashboard now)
+const DashboardRoute = () => {
+  const { user } = useAuth();
+  if (!user) return <Navigate to="/login" replace />;
+  return <Dashboard />;
+};
+
 function App() {
   return (
     <ErrorBoundary>
@@ -108,8 +130,9 @@ function App() {
         <WalletProvider>
           <NotificationProvider>
             <CartProvider>
-              <Router>
-                <div className="min-h-screen bg-gray-50">
+              <ChatProvider>
+                <Router>
+                  <div className="min-h-screen bg-gray-50">
                   <Routes>
                   {/* Public Routes */}
                   <Route path="/login" element={
@@ -124,10 +147,24 @@ function App() {
                     </PublicRoute>
                   } />
                   
+                  <Route path="/forgot-password" element={
+                    <PublicRoute>
+                      <ForgotPassword onBack={() => window.location.href = '/login'} />
+                    </PublicRoute>
+                  } />
+                  
+                  {/* OTP-based password reset - no longer using URL tokens
+                  <Route path="/reset-password/:token" element={
+                    <PublicRoute>
+                      <ResetPassword />
+                    </PublicRoute>
+                  } />
+                  */}
+                  
                   {/* Protected Routes */}
                   <Route path="/dashboard" element={
                     <ProtectedRoute>
-                      <Dashboard />
+                      <DashboardRoute />
                     </ProtectedRoute>
                   } />
                   
@@ -140,6 +177,21 @@ function App() {
                   <Route path="/business-marketplace/shops/:businessId" element={
                     <ProtectedRoute>
                       <BusinessShopDetails />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="/business/:businessId/products" element={
+                    <ProtectedRoute>
+                      <BusinessProducts />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="/business/:businessId/orders" element={
+                    <ProtectedRoute>
+                      <BusinessOrders />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="/business/apply" element={
+                    <ProtectedRoute>
+                      <BusinessApply />
                     </ProtectedRoute>
                   } />
                   
@@ -165,6 +217,31 @@ function App() {
                       <AccommodationMarket />
                     </ProtectedRoute>
                   } />
+                  <Route path="/lost-found" element={
+                    <ProtectedRoute>
+                      <LostFound />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="/notices" element={
+                    <ProtectedRoute>
+                      <NoticesBoard />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="/jobs" element={
+                    <ProtectedRoute>
+                      <JobsBoard />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="/tutoring" element={
+                    <ProtectedRoute>
+                      <Tutoring />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="/chat" element={
+                    <ProtectedRoute>
+                      <Chat />
+                    </ProtectedRoute>
+                  } />
                   
                   <Route path="/free-marketplace" element={
                     <ProtectedRoute>
@@ -180,6 +257,21 @@ function App() {
                   <Route path="/food-ordering" element={
                     <ProtectedRoute>
                       <FoodOrdering />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="/food-vendor/:vendorId/menu" element={
+                    <ProtectedRoute>
+                      <VendorMenu />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="/food-vendor/:vendorId/orders" element={
+                    <ProtectedRoute>
+                      <VendorOrders />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="/food-vendor/apply" element={
+                    <ProtectedRoute>
+                      <FoodVendorApply />
                     </ProtectedRoute>
                   } />
                   
@@ -228,11 +320,12 @@ function App() {
                   </Routes>
                 </div>
               </Router>
-            </CartProvider>
-          </NotificationProvider>
-        </WalletProvider>
-      </AuthProvider>
-    </ErrorBoundary>
+            </ChatProvider>
+          </CartProvider>
+        </NotificationProvider>
+      </WalletProvider>
+    </AuthProvider>
+  </ErrorBoundary>
   );
 }
 

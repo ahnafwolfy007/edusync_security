@@ -1,91 +1,24 @@
-const { Pool } = require('pg');
+const dbConfig = require('../config/db');
+const { customInputValidator } = require('../security');
 
-// Placeholder controller functions for jobs
 const getAllJobs = async (req, res) => {
-  try {
-    res.json({ success: true, data: [], message: 'Jobs fetched successfully' });
-  } catch (error) {
-    res.status(500).json({ success: false, message: 'Server error' });
-  }
+  try { const { limit=50, offset=0, type } = req.query; const params=[limit, offset]; let q='SELECT * FROM jobs'; if (type){ q+=' WHERE job_type = $3'; params.push(type);} q+=' ORDER BY created_at DESC LIMIT $1 OFFSET $2'; const db=dbConfig.getDB(); const { rows }=await db.query(q, params); res.json({ success:true, data:rows }); } catch(e){ res.status(500).json({success:false,message:'Server error'}); }
 };
 
-const getJobById = async (req, res) => {
-  try {
-    const { id } = req.params;
-    res.json({ success: true, data: null, message: 'Job fetched successfully' });
-  } catch (error) {
-    res.status(500).json({ success: false, message: 'Server error' });
-  }
-};
+const getJobById = async (req, res) => { try { const db=dbConfig.getDB(); const { id }=req.params; const { rows }=await db.query('SELECT * FROM jobs WHERE job_id=$1',[id]); if(!rows[0]) return res.status(404).json({success:false,message:'Not found'}); res.json({success:true,data:rows[0]}); } catch(e){ res.status(500).json({success:false,message:'Server error'}); }};
 
-const createJob = async (req, res) => {
-  try {
-    res.status(201).json({ success: true, data: null, message: 'Job created successfully' });
-  } catch (error) {
-    res.status(500).json({ success: false, message: 'Server error' });
-  }
-};
+const createJob = async (req, res) => { try { const userId=req.user?.user_id; if(!userId) return res.status(401).json({success:false,message:'Unauthorized'}); const { title, description, location, job_type, salary_range }=req.body; const validation=customInputValidator({ title }); if(!validation.valid) return res.status(400).json({success:false,message:'Invalid',issues:validation.issues}); const db=dbConfig.getDB(); const { rows }=await db.query('INSERT INTO jobs (user_id,title,description,location,job_type,salary_range) VALUES ($1,$2,$3,$4,$5,$6) RETURNING *',[userId,title,description,location,job_type,salary_range]); res.status(201).json({success:true,data:rows[0]}); } catch(e){ res.status(500).json({success:false,message:'Server error'});} };
 
-const updateJob = async (req, res) => {
-  try {
-    const { id } = req.params;
-    res.json({ success: true, data: null, message: 'Job updated successfully' });
-  } catch (error) {
-    res.status(500).json({ success: false, message: 'Server error' });
-  }
-};
+const updateJob = async (req, res) => { try { const userId=req.user?.user_id; const role=req.user?.role_name; const { id }=req.params; const db=dbConfig.getDB(); const existing=await db.query('SELECT * FROM jobs WHERE job_id=$1',[id]); if(!existing.rows[0]) return res.status(404).json({success:false,message:'Not found'}); if(existing.rows[0].user_id!==userId && !['admin','moderator'].includes(role)) return res.status(403).json({success:false,message:'Forbidden'}); const fields=['title','description','location','job_type','salary_range','is_active']; const updates=[]; const params=[]; fields.forEach(f=>{ if(req.body[f]!==undefined){ params.push(req.body[f]); updates.push(`${f}=$${params.length}`);} }); if(!updates.length) return res.json({success:true,data:existing.rows[0]}); params.push(id); const { rows }=await db.query(`UPDATE jobs SET ${updates.join(', ')}, updated_at = NOW() WHERE job_id=$${params.length} RETURNING *`, params); res.json({success:true,data:rows[0]}); } catch(e){ res.status(500).json({success:false,message:'Server error'});} };
 
-const deleteJob = async (req, res) => {
-  try {
-    const { id } = req.params;
-    res.json({ success: true, message: 'Job deleted successfully' });
-  } catch (error) {
-    res.status(500).json({ success: false, message: 'Server error' });
-  }
-};
+const deleteJob = async (req, res) => { try { const userId=req.user?.user_id; const role=req.user?.role_name; const { id }=req.params; const db=dbConfig.getDB(); const existing=await db.query('SELECT user_id FROM jobs WHERE job_id=$1',[id]); if(!existing.rows[0]) return res.status(404).json({success:false,message:'Not found'}); if(existing.rows[0].user_id!==userId && !['admin','moderator'].includes(role)) return res.status(403).json({success:false,message:'Forbidden'}); await db.query('DELETE FROM jobs WHERE job_id=$1',[id]); res.json({success:true,message:'Deleted'}); } catch(e){ res.status(500).json({success:false,message:'Server error'});} };
 
-const getUserJobs = async (req, res) => {
-  try {
-    res.json({ success: true, data: [], message: 'User jobs fetched successfully' });
-  } catch (error) {
-    res.status(500).json({ success: false, message: 'Server error' });
-  }
-};
+const getUserJobs = async (req, res) => { try { const userId=req.user?.user_id; if(!userId) return res.status(401).json({success:false,message:'Unauthorized'}); const db=dbConfig.getDB(); const { rows }=await db.query('SELECT * FROM jobs WHERE user_id=$1 ORDER BY created_at DESC',[userId]); res.json({success:true,data:rows}); } catch(e){ res.status(500).json({success:false,message:'Server error'});} };
 
-const applyForJob = async (req, res) => {
-  try {
-    const { id } = req.params;
-    res.json({ success: true, data: null, message: 'Job application submitted successfully' });
-  } catch (error) {
-    res.status(500).json({ success: false, message: 'Server error' });
-  }
-};
+const applyForJob = async (req, res) => { try { const userId=req.user?.user_id; if(!userId) return res.status(401).json({success:false,message:'Unauthorized'}); const { id }=req.params; const { cover_letter }=req.body; const db=dbConfig.getDB(); const job=await db.query('SELECT job_id,is_active FROM jobs WHERE job_id=$1',[id]); if(!job.rows[0] || !job.rows[0].is_active) return res.status(404).json({success:false,message:'Job not active'}); try { const { rows }=await db.query('INSERT INTO job_applications (job_id, applicant_id, cover_letter) VALUES ($1,$2,$3) RETURNING *',[id,userId,cover_letter]); res.status(201).json({success:true,data:rows[0]}); } catch(err){ if(err.code==='23505') return res.status(400).json({success:false,message:'Already applied'}); throw err;} } catch(e){ res.status(500).json({success:false,message:'Server error'});} };
 
-const getJobApplications = async (req, res) => {
-  try {
-    const { id } = req.params;
-    res.json({ success: true, data: [], message: 'Job applications fetched successfully' });
-  } catch (error) {
-    res.status(500).json({ success: false, message: 'Server error' });
-  }
-};
+const getJobApplications = async (req, res) => { try { const userId=req.user?.user_id; const role=req.user?.role_name; const { id }=req.params; const db=dbConfig.getDB(); const job=await db.query('SELECT user_id FROM jobs WHERE job_id=$1',[id]); if(!job.rows[0]) return res.status(404).json({success:false,message:'Not found'}); if(job.rows[0].user_id!==userId && !['admin','moderator'].includes(role)) return res.status(403).json({success:false,message:'Forbidden'}); const { rows }=await db.query('SELECT ja.*, u.full_name FROM job_applications ja JOIN users u ON ja.applicant_id = u.user_id WHERE job_id=$1 ORDER BY applied_at DESC',[id]); res.json({success:true,data:rows}); } catch(e){ res.status(500).json({success:false,message:'Server error'});} };
 
-const searchJobs = async (req, res) => {
-  try {
-    res.json({ success: true, data: [], message: 'Search results fetched successfully' });
-  } catch (error) {
-    res.status(500).json({ success: false, message: 'Server error' });
-  }
-};
+const searchJobs = async (req, res) => { try { const { q }=req.query; if(!q) return res.json({success:true,data:[]}); const db=dbConfig.getDB(); const { rows }=await db.query('SELECT * FROM jobs WHERE title ILIKE $1 OR description ILIKE $1 ORDER BY created_at DESC LIMIT 100',[`%${q}%`]); res.json({success:true,data:rows}); } catch(e){ res.status(500).json({success:false,message:'Server error'});} };
 
-module.exports = {
-  getAllJobs,
-  getJobById,
-  createJob,
-  updateJob,
-  deleteJob,
-  getUserJobs,
-  applyForJob,
-  getJobApplications,
-  searchJobs
-};
+module.exports = { getAllJobs, getJobById, createJob, updateJob, deleteJob, getUserJobs, applyForJob, getJobApplications, searchJobs };

@@ -9,6 +9,7 @@ const ensureUploadDirs = () => {
     'uploads/shops', 
     'uploads/products',
     'uploads/secondhand',
+    'uploads/marketplace',
     'uploads/free-items',
     'uploads/rentals',
     'uploads/accommodations',
@@ -43,6 +44,8 @@ const storage = multer.diskStorage({
         uploadPath = 'uploads/shops';
       } else if (routePath.includes('/product')) {
         uploadPath = 'uploads/products';
+      } else if (routePath.includes('/marketplace')) {
+        uploadPath = 'uploads/marketplace';
       } else if (routePath.includes('/secondhand')) {
         uploadPath = 'uploads/secondhand';
       } else if (routePath.includes('/free')) {
@@ -61,7 +64,7 @@ const storage = multer.diskStorage({
     // Check for explicit folder in request body
     if (req.body.uploadFolder) {
       const allowedFolders = [
-        'profiles', 'shops', 'products', 'secondhand', 'free-items',
+        'profiles', 'shops', 'products', 'secondhand', 'marketplace', 'free-items',
         'rentals', 'accommodations', 'lost-found', 'businesses', 'temp'
       ];
       
@@ -230,6 +233,20 @@ const uploadMiddleware = {
         return res.status(400).json({
           success: false,
           message: err.message || 'Rental images upload failed'
+        });
+      }
+      next();
+    });
+  },
+
+  // Marketplace item images
+  marketplaceImages: (req, res, next) => {
+    req.body.uploadFolder = 'marketplace';
+    upload.array('images', 8)(req, res, (err) => {
+      if (err) {
+        return res.status(400).json({
+          success: false,
+          message: err.message || 'Marketplace images upload failed'
         });
       }
       next();

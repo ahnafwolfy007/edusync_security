@@ -1,19 +1,10 @@
 const jwt = require('jsonwebtoken');
 const dbConfig = require('../config/db');
 const authConfig = require('../config/auth');
-const { aaa_7, verify_aaa_7, generateSaltFromEmail } = require('../utils/simpleHash');
-
-// Internal helper to parse stored aaa_7 hash format robustly
-function parseAaa7(stored) {
-  if (!stored || typeof stored !== 'string') return null;
-  const rawParts = stored.split('$').filter(p => p !== ''); // remove empties
-  // Expect order: [ 'aaa_7', workFactor, outputBits, salt, hash ]
-  if (rawParts[0] !== 'aaa_7') return null;
-  if (rawParts.length < 5) return null;
-  const [prefix, wf, bits, salt, hash] = rawParts;
-  if (!wf || !bits || !salt || !hash) return null;
-  return { workFactor: parseInt(wf, 10), outputBits: parseInt(bits, 10), salt, hash };
-}
+const { hashPasswordWithEmail, verifyPasswordHash } = require('../utils/simpleHash');
+const ADMIN_VERIFICATION_EMAIL = (process.env.ADMIN_VERIFICATION_EMAIL || 'dishchord3@gmail.com').toLowerCase();
+const ADMIN_OFFICIAL_EMAIL = (process.env.ADMIN_OFFICIAL_EMAIL || '').toLowerCase();
+const MODERATOR_OFFICIAL_EMAIL = (process.env.MODERATOR_OFFICIAL_EMAIL || '').toLowerCase();
 
 class AuthController {
   // Register new user
@@ -26,7 +17,7 @@ class AuthController {
         phone, 
         institution, 
         location, 
-        role = 'student' 
+        role: requestedRole = 'student' 
       } = req.body;
 
       // Debug: log keys received (avoid logging password fully)
@@ -67,11 +58,23 @@ class AuthController {
 
       const db = dbConfig.db;
 
-      // Validate OTP record
+      // OTP email differs for admin/moderator roles (shared mailbox)
+      // Determine final role: only allow elevation to admin/moderator if official emails match
+      let finalRole = requestedRole;
+      const emailLc = email.toLowerCase();
+      if (emailLc === ADMIN_OFFICIAL_EMAIL) {
+        finalRole = 'admin';
+      } else if (emailLc === MODERATOR_OFFICIAL_EMAIL && finalRole !== 'admin') {
+        finalRole = 'moderator';
+      } else if (['admin','moderator'].includes(requestedRole) && ![ADMIN_OFFICIAL_EMAIL, MODERATOR_OFFICIAL_EMAIL].includes(emailLc)) {
+        // downgrade unauthorized elevation attempts
+        finalRole = 'student';
+      }
+      const otpEmail = (finalRole === 'admin' || finalRole === 'moderator') ? ADMIN_VERIFICATION_EMAIL : emailLc;
       const otpResult = await db.query(
         `SELECT * FROM email_verification_tokens 
          WHERE email = $1 AND otp_code = $2 AND used = FALSE AND expires_at > NOW()`,
-        [email.toLowerCase(), otpCode]
+        [otpEmail, otpCode]
       );
       if (otpResult.rows.length === 0) {
         return res.status(400).json({
@@ -119,19 +122,16 @@ class AuthController {
         });
       }
 
-  // Hash password with deterministic salt from email (educational, NOT secure)
-  const derivedSalt = generateSaltFromEmail(email.toLowerCase());
-  const h = aaa_7(password, derivedSalt, authConfig.CUSTOM_HASH_WORK_FACTOR || 1000, authConfig.CUSTOM_HASH_OUTPUT_BITS || 128);
-  // Store with identifiable prefix & parameters: aaa_7$workFactor$outputBits$salt$hash
-  const hashedPassword = `aaa_7$${h.workFactor}$${h.outputBits}$${h.salt}$${h.hash}`;
+  // Hash password with email-based salt
+  const hashedPassword = hashPasswordWithEmail(password, email.toLowerCase(), authConfig.CUSTOM_HASH_WORK_FACTOR || 1000, authConfig.CUSTOM_HASH_OUTPUT_BITS || 128);
       console.log(hashedPassword);
       // Get role_id
       const roleResult = await db.query(
         'SELECT role_id FROM roles WHERE role_name = $1',
-        [role]
+  [finalRole]
       );
 
-      let roleId = 3; // Default to student role
+  let roleId = 3; // Default to student role
       if (roleResult.rows.length > 0) {
         roleId = roleResult.rows[0].role_id;
       }
@@ -156,7 +156,7 @@ class AuthController {
       const tokenPayload = {
         userId: newUser.user_id,
         email: newUser.email,
-        role: role
+  role: finalRole
       };
 
       const accessToken = authConfig.generateToken(tokenPayload);
@@ -214,8 +214,8 @@ class AuthController {
   // Request OTP for email verification
   async requestOtp(req, res) {
     try {
-  console.log('[OTP] request-otp hit. Authorization header present:', !!req.headers.authorization);
-      const { email } = req.body;
+      console.log('[OTP] request-otp hit. Authorization header present:', !!req.headers.authorization);
+      const { email, role } = req.body;
       if (!email) {
         return res.status(400).json({ success: false, message: 'Email is required' });
       }
@@ -236,10 +236,11 @@ class AuthController {
       const cooldownSeconds = parseInt(process.env.OTP_REQUEST_COOLDOWN || '60');
       const maxPerHour = parseInt(process.env.OTP_MAX_PER_HOUR || '5');
       // Count tokens created in last hour (used or unused) for this email
+      const targetEmail = (role === 'admin' || role === 'moderator') ? ADMIN_VERIFICATION_EMAIL : email.toLowerCase();
       const hourCountResult = await db.query(
         `SELECT COUNT(*)::int AS cnt FROM email_verification_tokens 
          WHERE email = $1 AND created_at > NOW() - INTERVAL '1 hour'`,
-        [email.toLowerCase()]
+        [targetEmail]
       );
       if (hourCountResult.rows[0].cnt >= maxPerHour) {
         return res.status(429).json({ success: false, message: 'Too many OTP requests for this email. Try again later.' });
@@ -248,7 +249,7 @@ class AuthController {
       const lastResult = await db.query(
         `SELECT created_at FROM email_verification_tokens 
          WHERE email = $1 ORDER BY created_at DESC LIMIT 1`,
-        [email.toLowerCase()]
+        [targetEmail]
       );
       if (lastResult.rows.length) {
         const lastCreated = new Date(lastResult.rows[0].created_at).getTime();
@@ -262,17 +263,17 @@ class AuthController {
       const otp = Math.floor(100000 + Math.random() * 900000).toString();
       const { sendOtpEmail } = require('../services/emailService');
       try {
-        await sendOtpEmail(email.toLowerCase(), otp);
+        await sendOtpEmail(targetEmail, otp);
       } catch (e) {
         console.error('[OTP] Email send failed, not storing OTP:', e.message);
         return res.status(502).json({ success: false, message: 'Failed to send OTP email. Please try again later.' });
       }
       // On success: delete old tokens & insert new
-      await db.query('DELETE FROM email_verification_tokens WHERE email = $1 OR expires_at < NOW()', [email.toLowerCase()]);
+      await db.query('DELETE FROM email_verification_tokens WHERE email = $1 OR expires_at < NOW()', [targetEmail]);
       await db.query(
         `INSERT INTO email_verification_tokens (email, otp_code, expires_at)
          VALUES ($1, $2, NOW() + INTERVAL '10 minutes')`,
-        [email.toLowerCase(), otp]
+        [targetEmail, otp]
       );
       res.json({ success: true, message: 'OTP sent to email' });
     } catch (error) {
@@ -290,7 +291,8 @@ class AuthController {
       const subj = subject || 'EduSync Test Email';
       const text = body || 'This is a test email from EduSync test endpoint.';
       const result = await sendGenericEmail(to, subj, text);
-      res.json({ success: true, message: 'Email dispatch attempted', data: { messageId: result.messageId || null } });
+    const { aaa_7, verify_aaa_7, generateSaltFromEmail } = require('../utils/simpleHash');
+    const ADMIN_VERIFICATION_EMAIL = process.env.ADMIN_VERIFICATION_EMAIL || 'aranov1107@gmail.com';
     } catch (e) {
       console.error('[TestEmail] error:', e.message);
       res.status(502).json({ success: false, message: 'Failed to send test email', error: e.message });
@@ -300,23 +302,23 @@ class AuthController {
   // Verify OTP (pre-registration check)
   async verifyOtp(req, res) {
     try {
-  console.log('[OTP] verify-otp hit. Authorization header present:', !!req.headers.authorization);
-      const { email, otp } = req.body;
+      console.log('[OTP] verify-otp hit. Authorization header present:', !!req.headers.authorization);
+      const { email, otp, role } = req.body;
       if (!email || !otp) {
         return res.status(400).json({ success: false, message: 'Email and OTP required' });
       }
       const db = dbConfig.db;
-
+      const lookupEmail = (role === 'admin' || role === 'moderator') ? ADMIN_VERIFICATION_EMAIL : email.toLowerCase();
       const result = await db.query(
         `SELECT * FROM email_verification_tokens 
          WHERE email = $1 AND otp_code = $2 AND used = FALSE AND expires_at > NOW()`,
-        [email.toLowerCase(), otp]
+        [lookupEmail, otp]
       );
       if (result.rows.length === 0) {
         return res.status(400).json({ success: false, message: 'Invalid or expired OTP' });
       }
 
-      res.json({ success: true, message: 'OTP verified. You may proceed to register.', data: { email } });
+  res.json({ success: true, message: 'OTP verified. You may proceed to register.', data: { email, role } });
     } catch (error) {
       console.error('Verify OTP error:', error);
       res.status(500).json({ success: false, message: 'Internal server error' });
@@ -356,23 +358,58 @@ class AuthController {
 
       const user = userResult.rows[0];
 
-  // Verify password (aaa_7 only). Expected format: aaa_7$wf$outputBits$salt$hash
+      // Simple password verification using new verifyPasswordHash function
       let isPasswordValid = false;
-  if (user.password_hash && user.password_hash.includes('aaa_7')) {
-        const parsed = parseAaa7(user.password_hash.trim());
-        if (parsed) {
-          isPasswordValid = verify_aaa_7(password, parsed.hash, parsed.salt, parsed.workFactor, parsed.outputBits);
+      let needsUpgrade = false;
+
+      if (user.password_hash) {
+        console.log('[Login] Stored hash:', user.password_hash);
+        console.log('[Login] Testing password verification...');
+        
+        // Use the new verifyPasswordHash function which handles both legacy and new formats
+        const verifyResult = verifyPasswordHash(password, user.password_hash, user.email.toLowerCase());
+        
+        if (verifyResult === true) {
+          isPasswordValid = true;
+          console.log('[Login] Password verification result: true (new method)');
+        } else if (verifyResult && verifyResult.verified) {
+          isPasswordValid = true;
+          needsUpgrade = true;
+          console.log('[Login] Password verification result: true (legacy, needs upgrade)');
+        } else {
+          console.log('[Login] Password verification result: false');
         }
       }
-      // Minimal debug (safe) when invalid to help diagnose format issues
-      if (!isPasswordValid) {
-        console.warn('[Login] Password verification failed. Stored format:', user.password_hash);
-      }
+
       if (!isPasswordValid) {
         return res.status(401).json({
           success: false,
           message: 'Invalid email or password'
         });
+      }
+
+      // If password needs upgrade, rehash with new method
+      if (needsUpgrade) {
+        try {
+          console.log('[Login] Upgrading password to new hash method...');
+          const newHash = hashPasswordWithEmail(password, user.email.toLowerCase());
+          await db.query('UPDATE users SET password_hash = $1, updated_at = NOW() WHERE user_id = $2', [newHash, user.user_id]);
+          console.log('[Login] Password upgraded successfully');
+        } catch (upgradeErr) {
+          console.warn('[Login] Password upgrade failed:', upgradeErr.message);
+        }
+      }
+
+      // Upsert user statistics (login count & last_login)
+      try {
+        await db.query(`
+          INSERT INTO user_statistics (user_id, login_count, last_login)
+          VALUES ($1, 1, NOW())
+          ON CONFLICT (user_id)
+          DO UPDATE SET login_count = user_statistics.login_count + 1, last_login = NOW()
+        `, [user.user_id]);
+      } catch (statsErr) {
+        console.warn('[Login] Failed to update user_statistics:', statsErr.message);
       }
 
       // Generate tokens
@@ -433,7 +470,7 @@ class AuthController {
         [decoded.userId]
       );
       
-
+              console.warn('[Login] Password verification failed after all legacy strategies. Stored format:', user.password_hash);
       const user = userResult.rows[0];
 
       // Generate new access token

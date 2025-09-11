@@ -7,11 +7,11 @@ class BusinessMarketplaceController {
       const { 
         businessType, 
         search, 
-        sortBy = 'created_at',
-        sortOrder = 'DESC',
-        page = 1, 
-        limit = 20,
-        isVerified = true 
+  sortBy = 'created_at',
+  sortOrder = 'DESC',
+  page = 1, 
+  limit = 20,
+  isVerified 
       } = req.query;
 
       const db = dbConfig.getDB();
@@ -30,7 +30,8 @@ class BusinessMarketplaceController {
       const queryParams = [];
       let paramCount = 1;
 
-      if (isVerified !== undefined) {
+      // Only apply verification filter if client provided explicit param
+      if (typeof isVerified !== 'undefined' && isVerified !== 'all') {
         query += ` AND b.is_verified = $${paramCount++}`;
         queryParams.push(isVerified === 'true');
       }
@@ -71,7 +72,7 @@ class BusinessMarketplaceController {
       const countParams = [];
       let countParamIndex = 1;
 
-      if (isVerified !== undefined) {
+      if (typeof isVerified !== 'undefined' && isVerified !== 'all') {
         countQuery += ` AND b.is_verified = $${countParamIndex++}`;
         countParams.push(isVerified === 'true');
       }
@@ -121,6 +122,7 @@ class BusinessMarketplaceController {
       const db = dbConfig.getDB();
 
       // Get business details
+      const showAll = req.query.showAll === 'true';
       const businessResult = await db.query(
         `SELECT b.*, u.full_name as owner_name, u.email as owner_email, u.phone as owner_phone,
          (SELECT COUNT(*) FROM business_products WHERE business_id = b.business_id AND is_active = true) as product_count,
@@ -129,7 +131,7 @@ class BusinessMarketplaceController {
          (SELECT COUNT(*) FROM business_orders WHERE business_id = b.business_id AND rating IS NOT NULL) as review_count
          FROM businesses b
          JOIN users u ON b.owner_id = u.user_id
-         WHERE b.business_id = $1 AND b.is_verified = true`,
+         WHERE b.business_id = $1 ${showAll ? '' : 'AND b.is_verified = true'}`,
         [businessId]
       );
 

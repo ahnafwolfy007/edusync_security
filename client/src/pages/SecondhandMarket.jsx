@@ -17,6 +17,9 @@ import {
 import api from '../api';
 import { useNotification } from '../context/NotificationContext';
 import { useAuth } from '../context/AuthContext';
+import ItemUploadForm from '../components/marketplace/ItemUploadForm';
+import ChatButton from '../components/chat/ChatButton';
+import FirebaseConnectionTest from '../components/debug/FirebaseConnectionTest';
 
 const SecondhandMarket = () => {
   const navigate = useNavigate();
@@ -31,6 +34,7 @@ const SecondhandMarket = () => {
   const [sortBy, setSortBy] = useState('newest');
   const [viewMode, setViewMode] = useState('grid'); // grid or list
   const [showFilters, setShowFilters] = useState(false);
+  const [showSellModal, setShowSellModal] = useState(false);
 
   const categories = [
     { id: 'all', name: 'All Categories', icon: '🛍️' },
@@ -198,13 +202,15 @@ const SecondhandMarket = () => {
               <span className="badge badge-success text-xs">Verified</span>
             )}
           </div>
-          <button
-            onClick={() => navigate(`/chat/${product.seller?.id}`)}
-            className="btn btn-sm btn-outline"
-          >
-            <FiMessageCircle className="w-4 h-4 mr-1" />
-            Chat
-          </button>
+          <ChatButton
+            sellerId={product.seller?.id || product.seller_id || 'test-seller-123'}
+            sellerName={product.seller?.name || 'Test Seller'}
+            sellerType="secondhand"
+            itemId={product.id || product.item_id || 'test-item-123'}
+            itemName={product.title || product.item_name || 'Test Item'}
+            size="sm"
+            variant="outline"
+          />
         </div>
       </div>
     </div>
@@ -269,13 +275,15 @@ const SecondhandMarket = () => {
               />
               <span className="text-sm text-gray-600">{product.seller?.name}</span>
             </div>
-            <button
-              onClick={() => navigate(`/chat/${product.seller?.id}`)}
-              className="btn btn-sm btn-outline"
-            >
-              <FiMessageCircle className="w-4 h-4 mr-1" />
-              Chat
-            </button>
+            <ChatButton
+              sellerId={product.seller?.id || product.seller_id || 'test-seller-456'}
+              sellerName={product.seller?.name || 'Test Seller'}
+              sellerType="secondhand"
+              itemId={product.id || product.item_id || 'test-item-456'}
+              itemName={product.title || product.item_name || 'Test Item'}
+              size="sm"
+              variant="outline"
+            />
           </div>
         </div>
       </div>
@@ -284,6 +292,7 @@ const SecondhandMarket = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      
       {/* Header */}
       <div className="bg-white shadow-sm border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -295,7 +304,7 @@ const SecondhandMarket = () => {
               </p>
             </div>
             <button
-              onClick={() => navigate('/sell-item')}
+              onClick={() => setShowSellModal(true)}
               className="btn btn-primary flex items-center"
             >
               <FiPlus className="w-4 h-4 mr-2" />
@@ -471,6 +480,21 @@ const SecondhandMarket = () => {
           </div>
         )}
       </div>
+
+      {/* Sell Item Modal */}
+      <ItemUploadForm
+        isOpen={showSellModal}
+        onClose={() => setShowSellModal(false)}
+        onSuccess={() => {
+          fetchProducts();
+          setShowSellModal(false);
+        }}
+        apiEndpoint="/secondhand"
+        title="Sell Secondhand Item"
+      />
+      
+      {/* Firebase Connection Test - Development Only */}
+      {process.env.NODE_ENV === 'development' && <FirebaseConnectionTest />}
     </div>
   );
 };

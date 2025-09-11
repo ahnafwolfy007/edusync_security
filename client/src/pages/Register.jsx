@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { FiMail, FiLock, FiEye, FiEyeOff, FiUser, FiPhone, FiMapPin, FiShield } from 'react-icons/fi';
+import { motion } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
 import { useNotification } from '../context/NotificationContext';
 
@@ -49,8 +50,29 @@ const Register = () => {
   const roles = [
     { id: 'student', name: 'Student', description: 'I am a university student' },
     { id: 'business_owner', name: 'Business Owner', description: 'I want to sell products/services' },
-    { id: 'moderator', name: 'Teacher/Staff', description: 'I am university faculty/staff' }
+    { id: 'food_vendor', name: 'Food Vendor', description: 'I want to sell food items' },
+    { id: 'moderator', name: 'Moderator', description: 'I help manage platform content' },
+    { id: 'admin', name: 'Admin', description: 'Platform administrator (requires special OTP)' }
   ];
+
+  // Password strength logic (score 0-4) -> label & color
+  function passwordScore(pw) {
+    let score = 0;
+    if (!pw) return 0;
+    if (pw.length >= 8) score++;
+    if (/[A-Z]/.test(pw)) score++;
+    if (/[0-9]/.test(pw)) score++;
+    if (/[^A-Za-z0-9]/.test(pw)) score++;
+    return score;
+  }
+  const strength = passwordScore(formData.password);
+  const strengthMeta = [
+    { label: 'Too Weak', color: 'bg-red-500', bar: 0 },
+    { label: 'Weak', color: 'bg-orange-500', bar: 25 },
+    { label: 'Fair', color: 'bg-yellow-500', bar: 50 },
+    { label: 'Good', color: 'bg-blue-500', bar: 75 },
+    { label: 'Strong', color: 'bg-green-600', bar: 100 }
+  ][strength];
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -140,18 +162,23 @@ const Register = () => {
 
   const renderStepIndicator = () => (
     <div className="flex items-center justify-center mb-8">
-  {[1, 2, 3].map((step) => (
+      {[1, 2, 3].map((step) => (
         <React.Fragment key={step}>
-          <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
-            currentStep >= step
-              ? 'bg-blue-600 text-white'
-              : 'bg-gray-200 text-gray-500'
-          }`}>
+          <motion.div 
+            initial={{ scale: 0.8 }}
+            animate={{ scale: currentStep >= step ? 1 : 0.8 }}
+            transition={{ duration: 0.3 }}
+            className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium transition-all duration-300 ${
+              currentStep >= step
+                ? 'bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-lg'
+                : 'bg-white/20 text-white/60 backdrop-blur-sm'
+            }`}
+          >
             {step}
-          </div>
+          </motion.div>
           {step < 3 && (
-            <div className={`w-12 h-1 mx-2 ${
-              currentStep > step ? 'bg-blue-600' : 'bg-gray-200'
+            <div className={`w-12 h-1 mx-2 rounded transition-all duration-300 ${
+              currentStep > step ? 'bg-gradient-to-r from-blue-500 to-purple-600' : 'bg-white/20'
             }`} />
           )}
         </React.Fragment>
@@ -162,15 +189,15 @@ const Register = () => {
   const renderStep1 = () => (
     <div className="space-y-6">
       <div className="text-center mb-6">
-        <h3 className="text-lg font-medium text-gray-900">Basic Information</h3>
-        <p className="text-sm text-gray-600">Tell us about yourself</p>
+        <h3 className="text-lg font-medium text-white">📝 Basic Information</h3>
+        <p className="text-sm text-blue-200">Tell us about yourself</p>
       </div>
 
       <div className="form-group">
-        <label htmlFor="name" className="form-label">Full Name</label>
+        <label htmlFor="name" className="block text-sm font-medium text-white mb-2">Full Name</label>
         <div className="relative">
           <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-            <FiUser className="h-5 w-5 text-gray-400" />
+            <FiUser className="h-5 w-5 text-blue-300" />
           </div>
           <input
             id="name"
@@ -179,18 +206,18 @@ const Register = () => {
             required
             value={formData.name}
             onChange={handleChange}
-            className="form-input pl-10"
+            className="w-full pl-10 pr-4 py-3 bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl text-white placeholder-blue-200 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
             placeholder="Enter your full name"
           />
         </div>
-  {errors.name && <p className="text-xs text-red-600 mt-1">{errors.name}</p>}
+        {errors.name && <p className="text-xs text-red-300 mt-1">{errors.name}</p>}
       </div>
 
       <div className="form-group">
-        <label htmlFor="email" className="form-label">Email Address</label>
+        <label htmlFor="email" className="block text-sm font-medium text-white mb-2">Email Address</label>
         <div className="relative">
           <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-            <FiMail className="h-5 w-5 text-gray-400" />
+            <FiMail className="h-5 w-5 text-blue-300" />
           </div>
           <input
             id="email"
@@ -200,19 +227,19 @@ const Register = () => {
             required
             value={formData.email}
             onChange={handleChange}
-            className="form-input pl-10"
+            className="w-full pl-10 pr-4 py-3 bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl text-white placeholder-blue-200 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
             placeholder="Enter your email address"
           />
         </div>
-  <p className="form-help">Must be institutional: {allowedDomain}</p>
-  {errors.email && <p className="text-xs text-red-600 mt-1">{errors.email}</p>}
+        <p className="text-xs text-blue-200 mt-1">Must be institutional: {allowedDomain}</p>
+        {errors.email && <p className="text-xs text-red-300 mt-1">{errors.email}</p>}
       </div>
 
       <div className="form-group">
-        <label htmlFor="phone" className="form-label">Phone Number</label>
+        <label htmlFor="phone" className="block text-sm font-medium text-white mb-2">Phone Number</label>
         <div className="relative">
           <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-            <FiPhone className="h-5 w-5 text-gray-400" />
+            <FiPhone className="h-5 w-5 text-blue-300" />
           </div>
           <input
             id="phone"
@@ -221,11 +248,11 @@ const Register = () => {
             required
             value={formData.phone}
             onChange={handleChange}
-            className="form-input pl-10"
+            className="w-full pl-10 pr-4 py-3 bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl text-white placeholder-blue-200 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
             placeholder="Enter your phone number"
           />
         </div>
-  {errors.phone && <p className="text-xs text-red-600 mt-1">{errors.phone}</p>}
+        {errors.phone && <p className="text-xs text-red-300 mt-1">{errors.phone}</p>}
       </div>
     </div>
   );
@@ -233,20 +260,24 @@ const Register = () => {
   const renderStep2 = () => (
     <div className="space-y-6">
       <div className="text-center mb-6">
-        <h3 className="text-lg font-medium text-gray-900">Email Verification & Role</h3>
-        <p className="text-sm text-gray-600">Verify your institutional email</p>
+        <h3 className="text-lg font-medium text-white">📧 Email Verification & Role</h3>
+        <p className="text-sm text-blue-200">Verify your institutional email</p>
       </div>
 
       <div className="form-group">
-        <label className="form-label flex items-center">Email OTP Verification {otpVerified && <span className="ml-2 text-green-600 text-xs font-semibold flex items-center"><FiShield className="w-4 h-4 mr-1"/>Verified</span>}</label>
+        <label className="flex items-center text-sm font-medium text-white mb-2">
+          Email OTP Verification {otpVerified && <span className="ml-2 text-green-300 text-xs font-semibold flex items-center"><FiShield className="w-4 h-4 mr-1"/>Verified</span>}
+        </label>
         <div className="flex space-x-2">
           <input
             type="text"
             disabled
             value={formData.email}
-            className="form-input flex-1 bg-gray-100"
+            className="flex-1 px-4 py-3 bg-white/5 backdrop-blur-sm border border-white/20 rounded-xl text-white/60"
           />
-          <button
+          <motion.button
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
             type="button"
             onClick={async () => {
               if (resendTimer > 0 || otpVerified) return;
@@ -256,7 +287,7 @@ const Register = () => {
                 const res = await fetch((import.meta.env.VITE_API_URL || 'http://localhost:5000/api') + '/auth/request-otp', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ email: formData.email })
+                  body: JSON.stringify({ email: formData.email, role: formData.role })
                 });
                 const data = await res.json();
                 if (data.success) {
@@ -271,9 +302,11 @@ const Register = () => {
                 setSendingOtp(false);
               }
             }}
-            className={`btn btn-secondary ${resendTimer>0 || otpVerified ? 'opacity-60 cursor-not-allowed':''}`}
+            className={`px-6 py-3 bg-gradient-to-r from-green-500 to-emerald-600 text-white font-medium rounded-xl hover:from-green-600 hover:to-emerald-700 transition-all duration-200 ${resendTimer>0 || otpVerified ? 'opacity-60 cursor-not-allowed':''}`}
             disabled={sendingOtp || resendTimer>0 || otpVerified}
-          >{otpVerified ? 'Verified' : sendingOtp ? 'Sending...' : resendTimer>0 ? `Resend (${resendTimer}s)` : (otpSent ? 'Resend OTP' : 'Send OTP')}</button>
+          >
+            {otpVerified ? '✅ Verified' : sendingOtp ? '📤 Sending...' : resendTimer>0 ? `🕒 Resend (${resendTimer}s)` : (otpSent ? '🔄 Resend OTP' : '📨 Send OTP')}
+          </motion.button>
         </div>
         {otpSent && !otpVerified && (
           <div className="mt-3">
@@ -285,7 +318,7 @@ const Register = () => {
                   type="text"
                   inputMode="numeric"
                   maxLength={1}
-                  className="w-10 h-12 text-center border rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-10 h-12 text-center bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
                   value={d}
                   onChange={(e)=>{
                     const val = e.target.value.replace(/[^0-9]/g,'');
@@ -309,9 +342,11 @@ const Register = () => {
                   }}
                 />
               ))}
-              <button
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
                 type="button"
-                className="btn btn-primary ml-2"
+                className="px-6 py-3 bg-gradient-to-r from-blue-500 to-purple-600 text-white font-medium rounded-xl hover:from-blue-600 hover:to-purple-700 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed ml-2"
                 disabled={otpDigits.some(d=>d==='') || verifyingOtp}
                 onClick={async ()=>{
                   try {
@@ -320,7 +355,7 @@ const Register = () => {
                     const res = await fetch((import.meta.env.VITE_API_URL || 'http://localhost:5000/api') + '/auth/verify-otp', {
                       method: 'POST',
                       headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ email: formData.email, otp })
+                      body: JSON.stringify({ email: formData.email, otp, role: formData.role })
                     });
                     const data = await res.json();
                     if (data.success) {
@@ -334,19 +369,26 @@ const Register = () => {
                     setVerifyingOtp(false);
                   }
                 }}
-              >{verifyingOtp ? 'Verifying...' : 'Verify'}</button>
+              >
+                {verifyingOtp ? '⏳ Verifying...' : '🔍 Verify'}
+              </motion.button>
             </div>
-            <p className="text-xs text-gray-500 mt-2">Enter the 6-digit code sent to your email.</p>
+            <p className="text-xs text-blue-200 mt-2">Enter the 6-digit code sent to your email.</p>
           </div>
         )}
-        <p className="form-help text-xs">Email must end with {allowedDomain}</p>
+        <p className="text-xs text-blue-200 mt-1">Email must end with {allowedDomain}</p>
+        {(formData.role === 'admin' || formData.role === 'moderator') && (
+          <p className="text-xs mt-2 text-yellow-300 font-medium">
+            ⚠️ Admin/Moderator OTP is sent to the platform verification inbox (not your own email). Obtain the 6-digit code from the designated administrator.
+          </p>
+        )}
       </div>
 
       <div className="form-group">
-        <label htmlFor="location" className="form-label">Location</label>
+        <label htmlFor="location" className="block text-sm font-medium text-white mb-2">Location</label>
         <div className="relative">
           <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-            <FiMapPin className="h-5 w-5 text-gray-400" />
+            <FiMapPin className="h-5 w-5 text-blue-300" />
           </div>
           <input
             id="location"
@@ -355,34 +397,38 @@ const Register = () => {
             required
             value={formData.location}
             onChange={handleChange}
-            className="form-input pl-10"
+            className="w-full pl-10 pr-4 py-3 bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl text-white placeholder-blue-200 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
             placeholder="Enter your city/area"
           />
         </div>
-  {errors.location && <p className="text-xs text-red-600 mt-1">{errors.location}</p>}
+        {errors.location && <p className="text-xs text-red-300 mt-1">{errors.location}</p>}
       </div>
 
       <div className="form-group">
-        <label className="form-label">I am a...</label>
+        <label className="block text-sm font-medium text-white mb-3">I am a...</label>
         <div className="space-y-3">
           {roles.map((role) => (
-            <label key={role.id} className="flex items-start space-x-3 cursor-pointer">
+            <motion.label 
+              key={role.id} 
+              whileHover={{ scale: 1.01 }}
+              className="flex items-start space-x-3 cursor-pointer p-3 rounded-xl bg-white/5 backdrop-blur-sm border border-white/10 hover:bg-white/10 transition-all duration-200"
+            >
               <input
                 type="radio"
                 name="role"
                 value={role.id}
                 checked={formData.role === role.id}
                 onChange={handleChange}
-                className="mt-1 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
+                className="mt-1 h-4 w-4 text-blue-600 focus:ring-blue-500 border-white/30 bg-white/10"
               />
               <div>
-                <p className="font-medium text-gray-900">{role.name}</p>
-                <p className="text-sm text-gray-500">{role.description}</p>
+                <p className="font-medium text-white">{role.name}</p>
+                <p className="text-sm text-blue-200">{role.description}</p>
               </div>
-            </label>
+            </motion.label>
           ))}
         </div>
-  {errors.role && <p className="text-xs text-red-600 mt-1">{errors.role}</p>}
+        {errors.role && <p className="text-xs text-red-300 mt-1">{errors.role}</p>}
       </div>
     </div>
   );
@@ -390,8 +436,8 @@ const Register = () => {
   const renderStep3 = () => (
     <div className="space-y-6">
       <div className="text-center mb-6">
-        <h3 className="text-lg font-medium text-gray-900">Create Password</h3>
-        <p className="text-sm text-gray-600">Choose a strong password for your account</p>
+        <h3 className="text-lg font-medium text-white">🔐 Create Password</h3>
+        <p className="text-sm text-blue-200">Choose a strong password for your account</p>
       </div>
 
       <div className="form-group">
@@ -422,11 +468,22 @@ const Register = () => {
             )}
           </button>
         </div>
-  <p className="form-help">Minimum 6 characters</p>
+        <div className="mt-2">
+          <div className="w-full h-2 bg-gray-200 rounded overflow-hidden">
+            <div
+              className={`h-2 transition-all duration-300 ${strengthMeta.color}`}
+              style={{ width: `${strengthMeta.bar}%` }}
+            />
+          </div>
+          <p className="text-xs mt-1 font-medium text-gray-600 flex items-center">
+            Strength: <span className="ml-1 text-gray-900">{strengthMeta.label}</span>
+          </p>
+          <p className="form-help">Min 8 chars, include upper, number, symbol. 3 of 4 rules needed.</p>
+        </div>
   {errors.password && <p className="text-xs text-red-600 mt-1">{errors.password}</p>}
       </div>
 
-      <div className="form-group">
+  <div className="form-group">
         <label htmlFor="confirmPassword" className="form-label">Confirm Password</label>
         <div className="relative">
           <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -498,102 +555,155 @@ const Register = () => {
   );
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
-      <div className="sm:mx-auto sm:w-full sm:max-w-md">
+    <div className="min-h-screen bg-gradient-to-br from-blue-900 via-purple-800 to-indigo-900 flex flex-col justify-center py-12 sm:px-6 lg:px-8 relative overflow-hidden">
+      {/* Animated background blobs */}
+      <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none">
+        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-purple-500/20 rounded-full animate-blob"></div>
+        <div className="absolute top-1/3 right-1/4 w-96 h-96 bg-blue-500/20 rounded-full animate-blob animation-delay-2000"></div>
+        <div className="absolute bottom-1/4 left-1/3 w-96 h-96 bg-indigo-500/20 rounded-full animate-blob animation-delay-4000"></div>
+      </div>
+
+      <motion.div 
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.8 }}
+        className="sm:mx-auto sm:w-full sm:max-w-md relative z-10"
+      >
         <div className="text-center">
-          <h1 className="text-3xl font-bold text-blue-600 mb-2">EduSync</h1>
-          <h2 className="text-2xl font-bold text-gray-900">Create your account</h2>
-          <p className="mt-2 text-sm text-gray-600">
+          <motion.h1 
+            initial={{ scale: 0.8 }}
+            animate={{ scale: 1 }}
+            transition={{ duration: 0.5, delay: 0.2 }}
+            className="text-4xl font-bold bg-gradient-to-r from-white to-blue-200 bg-clip-text text-transparent mb-2"
+          >
+            ✨ EduSync
+          </motion.h1>
+          <h2 className="text-2xl font-bold text-white mb-2">Create your account</h2>
+          <p className="text-blue-200">
             Already have an account?{' '}
             <Link
               to="/login"
-              className="font-medium text-blue-600 hover:text-blue-500 transition-colors"
+              className="font-medium text-white hover:text-blue-200 transition-colors underline decoration-2 underline-offset-4"
             >
-              Sign in here
+              Sign in here 🚀
             </Link>
           </p>
         </div>
-      </div>
+      </motion.div>
 
-      <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
-        <div className="card">
-          <div className="card-body">
+      <motion.div 
+        initial={{ opacity: 0, y: 30 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.8, delay: 0.3 }}
+        className="mt-8 sm:mx-auto sm:w-full sm:max-w-md relative z-10"
+      >
+        <div className="bg-white/10 backdrop-blur-lg rounded-2xl shadow-2xl border border-white/20 p-8">
+          <div className="space-y-6">
             {renderStepIndicator()}
             
-            <form onSubmit={handleSubmit}>
+            <form onSubmit={handleSubmit} className="space-y-6">
               {currentStep === 1 && renderStep1()}
               {currentStep === 2 && renderStep2()}
               {currentStep === 3 && renderStep3()}
 
               <div className="flex justify-between mt-8">
                 {currentStep > 1 && (
-                  <button
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
                     type="button"
                     onClick={handlePrevStep}
-                    className="btn btn-secondary"
+                    className="px-6 py-3 border border-white/30 text-white rounded-xl hover:bg-white/10 transition-all duration-200 backdrop-blur-sm"
                   >
-                    Previous
-                  </button>
+                    ← Previous
+                  </motion.button>
                 )}
                 
-                <button
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
                   type="submit"
                   disabled={loading}
-                  className={`btn btn-primary ${currentStep === 1 ? 'w-full' : 'ml-auto'}`}
+                  className={`px-8 py-3 bg-gradient-to-r from-blue-500 to-purple-600 text-white font-semibold rounded-xl hover:from-blue-600 hover:to-purple-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-blue-900 transition-all duration-200 transform hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed ${currentStep === 1 ? 'w-full' : 'ml-auto'}`}
                 >
-                  {currentStep === 3 ? (loading ? 'Creating...' : 'Create Account') : 'Next'}
-                </button>
+                  {currentStep === 3 ? (loading ? '⏳ Creating...' : '🎉 Create Account') : '➡️ Next'}
+                </motion.button>
               </div>
             </form>
           </div>
         </div>
-      </div>
+      </motion.div>
 
       {/* Benefits Section */}
-      <div className="mt-12 max-w-4xl mx-auto px-4">
+      <motion.div 
+        initial={{ opacity: 0, y: 40 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.8, delay: 0.6 }}
+        className="mt-12 max-w-4xl mx-auto px-4 relative z-10"
+      >
         <div className="text-center mb-8">
-          <h3 className="text-xl font-semibold text-gray-900 mb-2">
-            Join the Campus Community
+          <h3 className="text-xl font-semibold text-white mb-2">
+            🌟 Join the Campus Community
           </h3>
-          <p className="text-gray-600">
+          <p className="text-blue-200">
             Connect, trade, and thrive with fellow students
           </p>
         </div>
         
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          <div className="text-center">
-            <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center mx-auto mb-3">
+          <motion.div 
+            initial={{ opacity: 0, y: 30 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.7 }}
+            className="text-center"
+          >
+            <div className="w-12 h-12 bg-white/20 backdrop-blur-sm rounded-lg flex items-center justify-center mx-auto mb-3 hover:bg-white/30 transition-colors duration-200">
               <span className="text-2xl">📚</span>
             </div>
-            <h4 className="font-medium text-gray-900 mb-1">Study Materials</h4>
-            <p className="text-sm text-gray-600">Buy and sell textbooks, notes</p>
-          </div>
+            <h4 className="font-medium text-white mb-1">Study Materials</h4>
+            <p className="text-sm text-blue-200">Buy and sell textbooks, notes</p>
+          </motion.div>
           
-          <div className="text-center">
-            <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center mx-auto mb-3">
+          <motion.div 
+            initial={{ opacity: 0, y: 30 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.8 }}
+            className="text-center"
+          >
+            <div className="w-12 h-12 bg-white/20 backdrop-blur-sm rounded-lg flex items-center justify-center mx-auto mb-3 hover:bg-white/30 transition-colors duration-200">
               <span className="text-2xl">🍕</span>
             </div>
-            <h4 className="font-medium text-gray-900 mb-1">Food Delivery</h4>
-            <p className="text-sm text-gray-600">Order from campus restaurants</p>
-          </div>
+            <h4 className="font-medium text-white mb-1">Food Delivery</h4>
+            <p className="text-sm text-blue-200">Order from campus restaurants</p>
+          </motion.div>
           
-          <div className="text-center">
-            <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center mx-auto mb-3">
+          <motion.div 
+            initial={{ opacity: 0, y: 30 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.9 }}
+            className="text-center"
+          >
+            <div className="w-12 h-12 bg-white/20 backdrop-blur-sm rounded-lg flex items-center justify-center mx-auto mb-3 hover:bg-white/30 transition-colors duration-200">
               <span className="text-2xl">🏠</span>
             </div>
-            <h4 className="font-medium text-gray-900 mb-1">Housing</h4>
-            <p className="text-sm text-gray-600">Find rooms and roommates</p>
-          </div>
+            <h4 className="font-medium text-white mb-1">Housing</h4>
+            <p className="text-sm text-blue-200">Find rooms and roommates</p>
+          </motion.div>
           
-          <div className="text-center">
-            <div className="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center mx-auto mb-3">
+          <motion.div 
+            initial={{ opacity: 0, y: 30 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 1.0 }}
+            className="text-center"
+          >
+            <div className="w-12 h-12 bg-white/20 backdrop-blur-sm rounded-lg flex items-center justify-center mx-auto mb-3 hover:bg-white/30 transition-colors duration-200">
               <span className="text-2xl">💼</span>
             </div>
-            <h4 className="font-medium text-gray-900 mb-1">Job Opportunities</h4>
-            <p className="text-sm text-gray-600">Part-time jobs and internships</p>
-          </div>
+            <h4 className="font-medium text-white mb-1">Job Opportunities</h4>
+            <p className="text-sm text-blue-200">Part-time jobs and internships</p>
+          </motion.div>
         </div>
-      </div>
+      </motion.div>
     </div>
   );
 };

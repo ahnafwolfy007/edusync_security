@@ -1,33 +1,12 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { motion } from "framer-motion";
 import { useAuth } from "../context/AuthContext";
 import { useWallet } from "../context/WalletContext";
-import { 
-  FiShoppingBag, 
-  FiBookOpen, 
-  FiHome, 
-  FiBriefcase, 
-  FiUsers, 
-  FiSearch,
-  FiDollarSign,
-  FiPlus,
-  FiTrendingUp,
-  FiActivity,
-  FiClock,
-  FiBell,
-  FiArrowRight,
-  FiGift,
-  FiMapPin,
-  FiMessageSquare,
-  FiCreditCard,
-  FiSettings,
-  FiStar,
-  FiPackage,
-  FiTruck,
-  FiHeart,
-  FiUserCheck
-} from 'react-icons/fi';
+import { FiShoppingBag, FiBookOpen, FiHome, FiBriefcase, FiUsers, FiSearch, FiDollarSign, FiPlus, FiTrendingUp, FiActivity, FiClock, FiBell, FiArrowRight, FiGift, FiCreditCard, FiSettings, FiStar, FiPackage, FiTruck, FiUserCheck } from 'react-icons/fi';
 import api from '../api';
+import { businessService } from '../services/businessService';
+import { foodVendorService } from '../services/foodVendorService';
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -40,9 +19,34 @@ const Dashboard = () => {
     recentActivity: []
   });
   const [loading, setLoading] = useState(true);
+  const [bizAnalytics, setBizAnalytics] = useState(null);
+  const [vendorAnalytics, setVendorAnalytics] = useState(null);
+  const [primaryBusiness, setPrimaryBusiness] = useState(null);
+  const [vendorProfile, setVendorProfile] = useState(null);
 
   useEffect(() => {
     fetchDashboardData();
+    // load role specific lightweight analytics
+    const roleLower = (user?.role_name || user?.role || '').toLowerCase();
+    (async () => {
+      try {
+        if(roleLower==='business_owner'){
+          const list = await businessService.fetchMyBusinesses();
+          if(list?.length){
+            setPrimaryBusiness(list[0]);
+            const a = await businessService.fetchBusinessAnalytics(list[0].business_id || list[0].id);
+            setBizAnalytics(a?.analytics || a);
+          }
+        } else if(roleLower==='food_vendor'){
+          const v = await foodVendorService.fetchMyVendor();
+          if(v){
+            setVendorProfile(v);
+            const a = await foodVendorService.fetchVendorAnalytics(v.vendor_id || v.id);
+            setVendorAnalytics(a?.analytics || a);
+          }
+        }
+      } catch(err){ console.warn('Role analytics load skipped:', err.message); }
+    })();
   }, []);
 
   const fetchDashboardData = async () => {
@@ -157,7 +161,8 @@ const Dashboard = () => {
   ];
 
   // Quick action buttons
-  const quickActions = [
+  const role = (user?.role_name || user?.role || '').toLowerCase();
+  const quickActionsBase = [
     {
       title: 'Add Money to Wallet',
       description: 'Top up your digital wallet',
@@ -167,30 +172,40 @@ const Dashboard = () => {
       bg: 'bg-green-50'
     },
     {
-      title: 'Post New Item',
-      description: 'Sell something in the marketplace',
-      icon: FiPlus,
-      action: () => navigate('/post-item'),
-      color: 'text-blue-600',
-      bg: 'bg-blue-50'
-    },
-    {
       title: 'My Orders',
       description: 'Track your orders and purchases',
       icon: FiPackage,
       action: () => navigate('/orders'),
       color: 'text-purple-600',
       bg: 'bg-purple-50'
-    },
-    {
-      title: 'My Business',
-      description: 'Manage your business profile',
-      icon: FiUserCheck,
-      action: () => navigate('/business'),
-      color: 'text-indigo-600',
-      bg: 'bg-indigo-50'
     }
   ];
+  const roleExtras = [];
+  if(role==='business_owner'){
+    roleExtras.push({
+      title:'Manage Products', description:'Add or edit products', icon:FiShoppingBag, action:()=>navigate('/business-marketplace'), color:'text-indigo-600', bg:'bg-indigo-50'
+    });
+    roleExtras.push({
+      title:'Business Orders', description:'View customer orders', icon:FiTruck, action:()=>navigate('/business/1/orders'), color:'text-amber-600', bg:'bg-amber-50'
+    });
+  }
+  if(role==='food_vendor'){
+    roleExtras.push({
+      title:'Vendor Menu', description:'Update menu items', icon:FiBookOpen, action:()=>navigate('/food-vendor/1/menu'), color:'text-rose-600', bg:'bg-rose-50'
+    });
+    roleExtras.push({
+      title:'Food Orders', description:'Active meal orders', icon:FiTruck, action:()=>navigate('/food-vendor/1/orders'), color:'text-teal-600', bg:'bg-teal-50'
+    });
+  }
+  if(role==='admin' || role==='moderator'){
+    roleExtras.push({
+      title:'Admin Panel', description:'Moderate and review', icon:FiSettings, action:()=>navigate('/admin'), color:'text-red-600', bg:'bg-red-50'
+    });
+    roleExtras.push({
+      title:'User Management', description:'Review users & roles', icon:FiUsers, action:()=>navigate('/admin?tab=users'), color:'text-fuchsia-600', bg:'bg-fuchsia-50'
+    });
+  }
+  const quickActions = [...quickActionsBase, ...roleExtras];
 
   const userMenuItems = [
     { title: 'Profile Settings', icon: FiSettings, path: '/profile' },
@@ -208,87 +223,140 @@ const Dashboard = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gradient-to-br from-blue-900 via-purple-800 to-indigo-900 relative overflow-hidden">
+      {/* Animated background blobs */}
+      <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none">
+        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-purple-500/20 rounded-full animate-blob"></div>
+        <div className="absolute top-1/3 right-1/4 w-96 h-96 bg-blue-500/20 rounded-full animate-blob animation-delay-2000"></div>
+        <div className="absolute bottom-1/4 left-1/3 w-96 h-96 bg-indigo-500/20 rounded-full animate-blob animation-delay-4000"></div>
+      </div>
+
       {/* Header */}
-      <div className="bg-white shadow-sm border-b">
+      <motion.div 
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.6 }}
+        className="bg-white/10 backdrop-blur-lg border-b border-white/20 relative z-10"
+      >
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="py-6">
             <div className="flex items-center justify-between">
-              <div>
-                <h1 className="text-3xl font-bold text-gray-900">
-                  Welcome back, {user?.full_name || user?.email}!
+              <motion.div
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.6, delay: 0.2 }}
+              >
+                <h1 className="text-3xl font-bold text-white">
+                  🎉 Welcome back, {user?.full_name || user?.email}!
                 </h1>
-                <p className="text-gray-600 mt-1">
-                  Your all-in-one campus marketplace for everything you need
+                <p className="text-blue-200 mt-1">
+                  Your all-in-one campus marketplace for everything you need ✨
                 </p>
-              </div>
-              <div className="flex items-center space-x-3">
-                <FiStar className="w-5 h-5 text-yellow-500" />
-                <span className="text-sm text-gray-600">
-                  {user?.role || 'Student'} Member
+              </motion.div>
+              <motion.div 
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.6, delay: 0.4 }}
+                className="flex items-center space-x-3 bg-white/10 backdrop-blur-sm rounded-xl px-4 py-2 border border-white/20"
+              >
+                <FiStar className="w-5 h-5 text-yellow-400" />
+                <span className="text-sm text-white">
+                  {(() => {
+                    switch (role) {
+                      case 'admin': return '👑 Admin Member';
+                      case 'moderator': return '🛡️ Moderator Member';
+                      case 'business_owner': return '💼 Business Owner';
+                      case 'food_vendor': return '🍕 Food Vendor';
+                      case 'student':
+                      case '':
+                      default: return '🎓 Student Member';
+                    }
+                  })()}
                 </span>
-              </div>
+              </motion.div>
             </div>
           </div>
         </div>
-      </div>
+      </motion.div>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 relative z-10">
         {/* Wallet Overview */}
-        <div className="mb-8">
-          <div className="bg-gradient-to-r from-blue-600 to-purple-600 rounded-2xl p-6 text-white relative overflow-hidden">
+        <motion.div 
+          initial={{ opacity: 0, y: 30 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, delay: 0.3 }}
+          className="mb-8"
+        >
+          <div className="bg-gradient-to-r from-blue-600 to-purple-600 rounded-2xl p-6 text-white relative overflow-hidden shadow-2xl border border-white/20">
             <div className="absolute top-0 right-0 w-32 h-32 bg-white bg-opacity-10 rounded-full -translate-y-8 translate-x-8"></div>
             <div className="absolute bottom-0 left-0 w-24 h-24 bg-white bg-opacity-10 rounded-full translate-y-8 -translate-x-8"></div>
             <div className="relative z-10 flex items-center justify-between">
               <div>
-                <h3 className="text-lg font-semibold mb-2">Digital Wallet Balance</h3>
+                <h3 className="text-lg font-semibold mb-2">💰 Digital Wallet Balance</h3>
                 <p className="text-4xl font-bold mb-1">
                   ৳{wallet?.balance?.toLocaleString() || '0.00'}
                 </p>
                 <p className="text-blue-100">
-                  {transactions?.length || 0} transactions this month
+                  📊 {transactions?.length || 0} transactions this month
                 </p>
               </div>
               <div className="text-right">
                 <FiDollarSign className="w-16 h-16 mb-3 opacity-80" />
-                <button
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
                   onClick={() => navigate('/wallet')}
-                  className="bg-white bg-opacity-20 hover:bg-opacity-30 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center"
+                  className="bg-white/20 hover:bg-white/30 backdrop-blur-sm px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center border border-white/30"
                 >
                   Manage Wallet <FiArrowRight className="ml-2 w-4 h-4" />
-                </button>
+                </motion.button>
               </div>
             </div>
           </div>
-        </div>
+        </motion.div>
 
         {/* Quick Actions */}
-        <div className="mb-8">
-          <h2 className="text-2xl font-semibold text-gray-900 mb-6">Quick Actions</h2>
+        <motion.div 
+          initial={{ opacity: 0, y: 30 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, delay: 0.5 }}
+          className="mb-8"
+        >
+          <h2 className="text-2xl font-semibold text-white mb-6">🚀 Quick Actions</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {quickActions.map((action, index) => (
-              <button
+              <motion.button
                 key={index}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.4, delay: 0.1 * index }}
+                whileHover={{ scale: 1.02, y: -2 }}
+                whileTap={{ scale: 0.98 }}
                 onClick={action.action}
-                className="card p-6 hover:shadow-xl transition-all duration-300 text-left group border-2 border-transparent hover:border-blue-200"
+                className="bg-white/10 backdrop-blur-lg p-6 rounded-2xl border border-white/20 hover:bg-white/20 transition-all duration-300 text-left group shadow-lg hover:shadow-xl"
               >
                 <div className="flex flex-col items-center text-center">
-                  <div className={`p-4 rounded-2xl ${action.bg} mb-4 group-hover:scale-110 transition-transform duration-200`}>
-                    <action.icon className={`w-8 h-8 ${action.color}`} />
+                  <div className={`p-4 rounded-2xl ${action.bg} mb-4 group-hover:scale-110 transition-transform duration-200 bg-white/20 backdrop-blur-sm border border-white/30`}>
+                    <action.icon className="w-8 h-8 text-white" />
                   </div>
-                  <h3 className="font-semibold text-gray-900 group-hover:text-blue-600 mb-2">
+                  <h3 className="font-semibold text-white group-hover:text-blue-200 mb-2">
                     {action.title}
                   </h3>
-                  <p className="text-sm text-gray-500">{action.description}</p>
+                  <p className="text-sm text-blue-200">{action.description}</p>
                 </div>
-              </button>
+              </motion.button>
             ))}
           </div>
-        </div>
+        </motion.div>
 
         {/* Main Marketplaces */}
-        <div className="mb-8">
-          <h2 className="text-2xl font-semibold text-gray-900 mb-6">Main Marketplaces</h2>
+        <motion.div 
+          initial={{ opacity: 0, y: 30 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, delay: 0.7 }}
+          className="mb-8"
+        >
+          <h2 className="text-2xl font-semibold text-white mb-6">🏪 Main Marketplaces</h2>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
             {mainMarketplaces.map((marketplace) => (
               <div
@@ -331,11 +399,16 @@ const Dashboard = () => {
               </div>
             ))}
           </div>
-        </div>
+        </motion.div>
 
         {/* Additional Services */}
-        <div className="mb-8">
-          <h2 className="text-2xl font-semibold text-gray-900 mb-6">Additional Services</h2>
+        <motion.div 
+          initial={{ opacity: 0, y: 30 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, delay: 0.9 }}
+          className="mb-8"
+        >
+          <h2 className="text-2xl font-semibold text-white mb-6">🛠️ Additional Services</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
             {additionalServices.map((service) => (
               <div
@@ -360,10 +433,15 @@ const Dashboard = () => {
               </div>
             ))}
           </div>
-        </div>
+        </motion.div>
 
         {/* Dashboard Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <motion.div 
+          initial={{ opacity: 0, y: 30 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, delay: 1.1 }}
+          className="grid grid-cols-1 lg:grid-cols-3 gap-8"
+        >
           {/* Recent Activity */}
           <div className="lg:col-span-2">
             <div className="card">
@@ -403,6 +481,35 @@ const Dashboard = () => {
 
           {/* User Statistics & Quick Menu */}
           <div className="space-y-6">
+            {(role==='business_owner' && bizAnalytics) && (
+              <div className="card">
+                <div className="card-header">
+                  <h3 className="text-lg font-semibold text-gray-900">Business Snapshot</h3>
+                </div>
+                <div className="card-body grid grid-cols-2 gap-4 text-sm">
+                  <div><span className="text-gray-500">Products</span><div className="font-semibold">{bizAnalytics.active_products ?? '—'}</div></div>
+                  <div><span className="text-gray-500">Orders</span><div className="font-semibold">{bizAnalytics.total_orders ?? '—'}</div></div>
+                  <div><span className="text-gray-500">Completed</span><div className="font-semibold">{bizAnalytics.completed_orders ?? '—'}</div></div>
+                  <div><span className="text-gray-500">Revenue</span><div className="font-semibold">{bizAnalytics.total_revenue ?? '—'}</div></div>
+                  <button onClick={()=>navigate(`/business/${primaryBusiness?.business_id || primaryBusiness?.id}/products`)} className="btn btn-secondary btn-sm col-span-2 mt-2">Manage Products</button>
+                </div>
+              </div>
+            )}
+            {(role==='food_vendor' && vendorAnalytics) && (
+              <div className="card">
+                <div className="card-header">
+                  <h3 className="text-lg font-semibold text-gray-900">Food Vendor Snapshot</h3>
+                </div>
+                <div className="card-body grid grid-cols-2 gap-4 text-sm">
+                  <div><span className="text-gray-500">Items</span><div className="font-semibold">{vendorAnalytics.available_items ?? '—'}</div></div>
+                  <div><span className="text-gray-500">Orders</span><div className="font-semibold">{vendorAnalytics.total_orders ?? '—'}</div></div>
+                  <div><span className="text-gray-500">Active</span><div className="font-semibold">{vendorAnalytics.active_orders ?? '—'}</div></div>
+                  <div><span className="text-gray-500">Revenue</span><div className="font-semibold">{vendorAnalytics.total_revenue ?? '—'}</div></div>
+                  {vendorAnalytics.avg_rating && <div className="col-span-2"><span className="text-gray-500">Avg Rating</span><div className="font-semibold">{vendorAnalytics.avg_rating.toFixed ? vendorAnalytics.avg_rating.toFixed(1) : vendorAnalytics.avg_rating}</div></div>}
+                  <button onClick={()=>navigate(`/food-vendor/${vendorProfile?.vendor_id || vendorProfile?.id}/menu`)} className="btn btn-secondary btn-sm col-span-2 mt-2">Manage Menu</button>
+                </div>
+              </div>
+            )}
             {/* Statistics */}
             <div className="card">
               <div className="card-header">
@@ -462,7 +569,7 @@ const Dashboard = () => {
               </div>
             </div>
           </div>
-        </div>
+        </motion.div>
       </div>
     </div>
   );

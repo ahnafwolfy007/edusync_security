@@ -44,9 +44,9 @@ function aaa_7(input, salt = null, workFactor = 500, outputBits = 128) {
     throw new Error("Output bits must be 64, 128, or 256");
   }
 
-  // If no salt provided, generate one
+  // If no salt provided, generate from email (must be passed separately)
   if (salt === null) {
-    salt = generateSalt(16);
+    throw new Error("Salt is required - use generateSaltFromEmail(email) to generate it");
   }
 
   // Convert input string + salt into ASCII array
@@ -119,20 +119,67 @@ function verify_aaa_7(input, expectedHash, salt, workFactor = 500, outputBits = 
   return result.hash === expectedHash;
 }
 
-// Example usage
-if (require.main === module) {
-  let data = "HelloWorld";
-  let hashed = aaa_7(data, null, 500, 128);
-
-  console.log("Data:", data);
-  console.log("Salt:", hashed.salt);
-  console.log("Hash:", hashed.hash);
-
-  let check1 = verify_aaa_7("HelloWorld", hashed.hash, hashed.salt, 500, 128);
-  let check2 = verify_aaa_7("WrongInput", hashed.hash, hashed.salt, 500, 128);
-
-  console.log("Verification (correct data):", check1);
-  console.log("Verification (wrong data):", check2);
+// Hash password with email-based salt and return full format
+function hashPasswordWithEmail(password, email, workFactor = 1000, outputBits = 128) {
+  const salt = generateSaltFromEmail(email);
+  const result = aaa_7(password, salt, workFactor, outputBits);
+  return `aaa_7$${workFactor}$${outputBits}$${salt}$${result.hash}`;
 }
 
-module.exports = { aaa_7, verify_aaa_7, generateSaltFromEmail };
+// Verify password against full hash format
+function verifyPasswordHash(password, hashedPassword, email) {
+  try {
+    const parts = hashedPassword.split('$');
+    if (parts.length !== 5 || parts[0] !== 'aaa_7') {
+      console.log('Invalid hash format in verifyPasswordHash');
+      return false;
+    }
+
+    const workFactor = parseInt(parts[1]);
+    const outputBits = parseInt(parts[2]);
+    const storedSalt = parts[3];
+    const storedHash = parts[4];
+
+    // First try with email-based salt (new method)
+    if (email) {
+      try {
+        const emailSalt = generateSaltFromEmail(email);
+        console.log('Testing with email-based salt:', emailSalt);
+        const result1 = aaa_7(password, emailSalt, workFactor, outputBits);
+        if (result1.hash === storedHash) {
+          console.log('Password verified with email-based salt (new method)');
+          return true;
+        }
+      } catch (err) {
+        console.log('Error testing with email salt:', err.message);
+      }
+    }
+
+    // Then try with the stored salt (legacy random salt method)
+    try {
+      console.log('Testing with stored salt (legacy method):', storedSalt);
+      const result2 = aaa_7(password, storedSalt, workFactor, outputBits);
+      if (result2.hash === storedHash) {
+        console.log('Password verified with stored salt (legacy method) - needs upgrade');
+        return { verified: true, needsUpgrade: true, password: password, email: email };
+      }
+    } catch (err) {
+      console.log('Error testing with stored salt:', err.message);
+    }
+
+    console.log('Password verification failed with both salt methods');
+    return false;
+  } catch (error) {
+    console.log('Error in verifyPasswordHash:', error.message);
+    return false;
+  }
+}
+
+module.exports = {
+  aaa_7,
+  verify_aaa_7,
+  generateSalt,
+  generateSaltFromEmail,
+  hashPasswordWithEmail,
+  verifyPasswordHash
+};

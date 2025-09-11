@@ -8,6 +8,9 @@ router.use(authenticateToken);
 // Create or get chat for secondhand item
 router.post('/create-or-get', chatController.createOrGetChat);
 
+// Send message (new simplified endpoint)
+router.post('/send-message', chatController.sendMessageSimple);
+
 // Send message
 router.post('/:chatId/messages', chatController.sendMessage);
 

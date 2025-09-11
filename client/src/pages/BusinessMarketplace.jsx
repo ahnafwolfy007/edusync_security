@@ -19,6 +19,8 @@ import {
 } from 'react-icons/fi';
 import api from '../api';
 import { useNotification } from '../context/NotificationContext';
+import MarketplaceDebugger from '../components/MarketplaceDebugger';
+import ChatButton from '../components/chat/ChatButton';
 
 const BusinessMarketplace = () => {
   const navigate = useNavigate();
@@ -35,6 +37,7 @@ const BusinessMarketplace = () => {
   const [showFilters, setShowFilters] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [pagination, setPagination] = useState({});
+  const [verifiedOnly, setVerifiedOnly] = useState(false);
 
   const sortOptions = [
     { id: 'created_at', name: 'Newest First', order: 'DESC' },
@@ -48,7 +51,7 @@ const BusinessMarketplace = () => {
     fetchBusinesses();
     fetchBusinessTypes();
     fetchTrendingBusinesses();
-  }, [selectedType, sortBy, sortOrder, currentPage]);
+  }, [selectedType, sortBy, sortOrder, currentPage, verifiedOnly]);
 
   const fetchBusinesses = async () => {
     try {
@@ -59,16 +62,24 @@ const BusinessMarketplace = () => {
         sortBy,
         sortOrder,
         page: currentPage,
-        limit: 12
+        limit: 12,
+        isVerified: verifiedOnly ? 'true' : 'all'
       });
 
-  const response = await api.get(`/business-marketplace/shops?${params}`);
+      console.log('Fetching businesses with params:', params.toString());
+      const response = await api.get(`/business-marketplace/shops?${params}`);
+      console.log('Business response:', response.data);
+      
       const payload = response.data?.data || response.data;
       setBusinesses(payload.businesses || []);
       setPagination(payload.pagination || {});
     } catch (error) {
       console.error('Error fetching businesses:', error);
+      console.error('Error details:', error.response?.data || error.message);
       showNotification('Error loading businesses', 'error');
+      // Set empty state so UI doesn't break
+      setBusinesses([]);
+      setPagination({});
     } finally {
       setLoading(false);
     }
@@ -76,21 +87,33 @@ const BusinessMarketplace = () => {
 
   const fetchBusinessTypes = async () => {
     try {
-  const response = await api.get('/business-marketplace/types');
+      console.log('Fetching business types...');
+      const response = await api.get('/business-marketplace/types');
+      console.log('Business types response:', response.data);
+      
       const payload = response.data?.data || response.data;
       setBusinessTypes(payload.businessTypes || []);
     } catch (error) {
       console.error('Error fetching business types:', error);
+      console.error('Error details:', error.response?.data || error.message);
+      // Set empty state so UI doesn't break
+      setBusinessTypes([]);
     }
   };
 
   const fetchTrendingBusinesses = async () => {
     try {
-  const response = await api.get('/business-marketplace/trending?limit=6');
+      console.log('Fetching trending businesses...');
+      const response = await api.get('/business-marketplace/trending?limit=6');
+      console.log('Trending businesses response:', response.data);
+      
       const payload = response.data?.data || response.data;
       setTrendingBusinesses(payload.businesses || []);
     } catch (error) {
       console.error('Error fetching trending businesses:', error);
+      console.error('Error details:', error.response?.data || error.message);
+      // Set empty state so UI doesn't break
+      setTrendingBusinesses([]);
     }
   };
 
@@ -111,82 +134,91 @@ const BusinessMarketplace = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const BusinessCard = ({ business, isCompact = false }) => (
-    <div 
-      className="card hover:shadow-xl transition-all duration-300 cursor-pointer group bg-white"
-      onClick={() => navigate(`/business-marketplace/shops/${business.business_id}`)}
-    >
-      <div className="relative">
-        <img
-          src={business.image || '/placeholder/400/200'}
-          alt={business.business_name}
-          className={`w-full ${isCompact ? 'h-32' : 'h-48'} object-cover`}
-        />
-        <div className="absolute top-3 right-3 flex space-x-2">
-          {business.is_verified && (
-            <div className="bg-green-500 text-white px-2 py-1 rounded-full text-xs font-medium">
-              ✓ Verified
-            </div>
-          )}
-        </div>
-        {business.product_count > 0 && (
-          <div className="absolute bottom-3 left-3 bg-blue-500 text-white px-2 py-1 rounded-full text-xs font-medium">
-            {business.product_count} Products
-          </div>
-        )}
-      </div>
-      
-      <div className={`p-${isCompact ? '3' : '4'}`}>
-        <div className="flex justify-between items-start mb-2">
-          <h3 className={`font-semibold text-gray-900 group-hover:text-blue-600 transition-colors ${isCompact ? 'text-sm' : 'text-base'}`}>
-            {business.business_name}
-          </h3>
-          <div className="flex items-center space-x-1">
-            <FiStar className="w-4 h-4 text-yellow-500 fill-current" />
-            <span className="text-sm font-medium">
-              {business.avg_rating ? parseFloat(business.avg_rating).toFixed(1) : 'New'}
-            </span>
-            {business.review_count > 0 && (
-              <span className="text-xs text-gray-500">({business.review_count})</span>
+  const BusinessCard = ({ business, isCompact = false }) => {
+    const rating = business.avg_rating ? parseFloat(business.avg_rating).toFixed(1) : null;
+    const createdAt = business.created_at ? new Date(business.created_at).toLocaleDateString() : null;
+    const recentOrders = business.recent_orders ?? business.recentOrders; // trending endpoint field
+    return (
+      <div 
+        className="card hover:shadow-xl transition-all duration-300 cursor-pointer group bg-white"
+        onClick={() => navigate(`/business-marketplace/shops/${business.business_id}`)}
+      >
+        <div className="relative">
+          <img
+            src={business.image || '/placeholder/400/200'}
+            alt={business.business_name}
+            className={`w-full ${isCompact ? 'h-32' : 'h-48'} object-cover`}
+          />
+          <div className="absolute top-3 right-3 flex space-x-2">
+            {business.is_verified && (
+              <div className="bg-green-500/90 backdrop-blur text-white px-2 py-1 rounded-full text-[10px] font-semibold tracking-wide shadow">
+                VERIFIED
+              </div>
             )}
           </div>
-        </div>
-        
-        <p className={`text-gray-600 mb-3 ${isCompact ? 'text-xs' : 'text-sm'}`}>
-          {business.description || 'No description available'}
-        </p>
-        
-        <div className="space-y-1 mb-3">
-          <div className="flex items-center text-xs text-gray-500">
-            <FiPackage className="w-3 h-3 mr-1" />
-            {business.business_type}
-          </div>
-          {business.order_count > 0 && (
-            <div className="flex items-center text-xs text-gray-500">
-              <FiUsers className="w-3 h-3 mr-1" />
-              {business.order_count} orders completed
+          {business.product_count > 0 && (
+            <div className="absolute bottom-3 left-3 bg-blue-600/90 backdrop-blur text-white px-2 py-1 rounded-full text-[10px] font-medium shadow">
+              {business.product_count} Products
+            </div>
+          )}
+          {recentOrders > 0 && (
+            <div className="absolute bottom-3 right-3 bg-orange-500/90 text-white px-2 py-1 rounded-full text-[10px] font-medium shadow">
+              {recentOrders} recent orders
             </div>
           )}
         </div>
         
-        <div className="flex items-center justify-between">
-          <span className="badge badge-primary text-xs">
-            {business.business_type}
-          </span>
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              navigate(`/business-marketplace/shops/${business.business_id}`);
-            }}
-            className="text-blue-600 hover:text-blue-800 font-medium text-sm flex items-center"
-          >
-            View Shop
-            <FiExternalLink className="w-3 h-3 ml-1" />
-          </button>
+        <div className={`p-${isCompact ? '3' : '4'} space-y-2`}>
+          <div className="flex justify-between items-start gap-2">
+            <h3 className={`font-semibold leading-snug text-gray-900 group-hover:text-blue-600 transition-colors ${isCompact ? 'text-sm' : 'text-base'}`}>{business.business_name}</h3>
+            <div className="flex items-center space-x-1 flex-shrink-0">
+              <FiStar className="w-4 h-4 text-yellow-500 fill-current" />
+              <span className="text-xs font-semibold">{rating || 'NEW'}</span>
+              {business.review_count > 0 && (
+                <span className="text-[10px] text-gray-500">({business.review_count})</span>
+              )}
+            </div>
+          </div>
+          <p className={`text-gray-600 ${isCompact ? 'text-xs line-clamp-2' : 'text-sm line-clamp-3'}`}>
+            {business.description || 'No description provided.'}
+          </p>
+          <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[11px] text-gray-600">
+            <div className="flex items-center"><FiPackage className="w-3 h-3 mr-1 text-gray-400" />{business.business_type}</div>
+            <div className="flex items-center"><FiUsers className="w-3 h-3 mr-1 text-gray-400" />{business.order_count || 0} orders</div>
+            <div className="flex items-center"><FiPackage className="w-3 h-3 mr-1 text-gray-400" />{business.product_count || 0} products</div>
+            {createdAt && <div className="flex items-center"><FiClock className="w-3 h-3 mr-1 text-gray-400" />Since {createdAt}</div>}
+            {business.owner_name && <div className="col-span-2 text-[10px] text-gray-500">Owner: {business.owner_name}</div>}
+          </div>
+          <div className="flex items-center justify-between pt-1">
+            <div className="flex gap-1 flex-wrap">
+              <span className="badge badge-primary text-[10px]">{business.business_type}</span>
+              {business.is_verified && <span className="badge badge-success text-[10px]">Verified</span>}
+              {business.order_count > 50 && <span className="badge badge-warning text-[10px]">Popular</span>}
+              {business.avg_rating >= 4.5 && business.review_count >= 5 && <span className="badge badge-info text-[10px]">Top Rated</span>}
+            </div>
+            <div className="flex items-center space-x-2">
+              <ChatButton
+                sellerId={business.owner_id}
+                sellerName={business.owner_name || business.business_name}
+                sellerType="business"
+                itemId={business.business_id}
+                itemName={business.business_name}
+                size="xs"
+                variant="minimal"
+                className="text-xs"
+              />
+              <button
+                onClick={(e) => { e.stopPropagation(); navigate(`/business-marketplace/shops/${business.business_id}`); }}
+                className="text-blue-600 hover:text-blue-800 font-medium text-[11px] flex items-center"
+              >
+                View <FiExternalLink className="w-3 h-3 ml-1" />
+              </button>
+            </div>
+          </div>
         </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   const BusinessListItem = ({ business }) => (
     <div 
@@ -242,15 +274,26 @@ const BusinessMarketplace = () => {
                 <span className="badge badge-success text-xs">Verified</span>
               )}
             </div>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                navigate(`/business-marketplace/shops/${business.business_id}`);
-              }}
-              className="text-blue-600 hover:text-blue-800 font-medium text-sm"
-            >
-              View Shop →
-            </button>
+            <div className="flex items-center space-x-2">
+              <ChatButton
+                sellerId={business.owner_id}
+                sellerName={business.owner_name || business.business_name}
+                sellerType="business"
+                itemId={business.business_id}
+                itemName={business.business_name}
+                size="sm"
+                variant="outline"
+              />
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  navigate(`/business-marketplace/shops/${business.business_id}`);
+                }}
+                className="text-blue-600 hover:text-blue-800 font-medium text-sm"
+              >
+                View Shop →
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -355,6 +398,18 @@ const BusinessMarketplace = () => {
                   ))}
                 </select>
               </div>
+              <div className="flex items-center space-x-2 md:col-span-2">
+                <input
+                  id="verifiedOnlyToggle"
+                  type="checkbox"
+                  checked={verifiedOnly}
+                  onChange={() => { setVerifiedOnly(v => !v); setCurrentPage(1); }}
+                  className="toggle toggle-sm"
+                />
+                <label htmlFor="verifiedOnlyToggle" className="text-sm text-gray-700">
+                  Show only verified businesses
+                </label>
+              </div>
             </div>
           )}
         </div>
@@ -362,7 +417,7 @@ const BusinessMarketplace = () => {
         {/* View Mode Toggle */}
         <div className="flex justify-between items-center mb-6">
           <p className="text-gray-600">
-            {pagination.totalBusinesses ? `Found ${pagination.totalBusinesses} businesses` : 'Loading...'}
+            {pagination.totalBusinesses !== undefined ? `Found ${pagination.totalBusinesses} businesses` : 'Loading...'}
           </p>
           <div className="flex items-center space-x-2">
             <button
@@ -456,6 +511,9 @@ const BusinessMarketplace = () => {
           </div>
         )}
       </div>
+      
+      {/* Debug Component - only in development */}
+      {process.env.NODE_ENV === 'development' && <MarketplaceDebugger />}
     </div>
   );
 };

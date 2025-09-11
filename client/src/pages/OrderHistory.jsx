@@ -43,7 +43,11 @@ const OrderHistory = () => {
     { id: 'food', name: 'Food Orders' },
     { id: 'business', name: 'Business Items' },
     { id: 'accommodation', name: 'Accommodation' },
-    { id: 'secondhand', name: 'Secondhand Items' }
+  { id: 'secondhand', name: 'Secondhand Items' },
+  { id: 'business_sale', name: 'Business Sales' },
+  { id: 'food_sale', name: 'Food Sales' },
+  { id: 'secondhand_sale', name: 'Secondhand Sales' },
+  { id: 'rental_sale', name: 'Rental Sales' }
   ];
 
   useEffect(() => {
@@ -58,11 +62,11 @@ const OrderHistory = () => {
     try {
       setLoading(true);
       const response = await api.get('/user/orders');
-      const data = response?.data?.data?.orders || response?.data?.orders || {};
+  const data = response?.data?.data?.orders || response?.data?.orders || {};
 
       const flat = [];
 
-      // Business orders
+  // Business orders (buyer perspective)
       (data.business || []).forEach((o) => {
         const items = (o.items || []).map(it => ({
           name: it.product_name || it.item_name,
@@ -111,8 +115,78 @@ const OrderHistory = () => {
         });
       });
 
-      // Food orders
+  // Food orders (buyer perspective)
       (data.food || []).forEach((o) => {
+      // Business sales (seller perspective)
+      (data.business_sales || []).forEach((o) => {
+        const items = (o.items || []).map(it => ({
+          name: it.product_name || it.item_name,
+          quantity: it.quantity || 1,
+          price: it.price || 0
+        }));
+        const total = items.reduce((s,it)=>s+it.price*it.quantity,0);
+        flat.push({
+          id: o.order_id || o.id,
+          order_type: 'business_sale',
+          status: o.status,
+          created_at: o.created_at || o.order_date,
+          total_amount: o.total_amount || total,
+          items,
+          vendor_name: o.business_name + ' (Sale)',
+          vendor_id: o.business_id,
+          is_seller: true
+        });
+      });
+
+      // Food sales (seller perspective)
+      // Secondhand sales (seller perspective)
+      (data.secondhand_sales || []).forEach(o => {
+        const items = [{ name: o.item_name, quantity: 1, price: o.price || 0 }];
+        flat.push({
+          id: o.order_id || o.id,
+          order_type: 'secondhand_sale',
+          status: o.status,
+          created_at: o.order_date || o.created_at,
+          total_amount: o.price || 0,
+          items,
+          vendor_name: (o.item_name) + ' (Sold)',
+          is_seller: true
+        });
+      });
+
+      // Rental sales (owner perspective)
+      (data.rental_sales || []).forEach(o => {
+        const items = [{ name: o.product_name, quantity: 1, price: o.rent_per_day || 0 }];
+        flat.push({
+          id: o.rental_order_id || o.order_id || o.id,
+          order_type: 'rental_sale',
+          status: o.status,
+          created_at: o.created_at,
+          total_amount: o.total_amount || items[0].price,
+          items,
+          vendor_name: (o.product_name) + ' (Booked)',
+          is_seller: true
+        });
+      });
+      (data.food_sales || []).forEach((o) => {
+        const items = (o.items || []).map(it => ({
+          name: it.item_name || it.product_name,
+          quantity: it.quantity || 1,
+          price: it.price || 0
+        }));
+        const total = items.reduce((s,it)=>s+it.price*it.quantity,0);
+        flat.push({
+          id: o.order_id || o.id,
+          order_type: 'food_sale',
+          status: o.status,
+          created_at: o.order_placed_at || o.created_at,
+          total_amount: o.total_amount || total,
+          items,
+            vendor_name: (o.shop_name || o.restaurant_name) + ' (Sale)',
+          vendor_id: o.vendor_id,
+          is_seller: true
+        });
+      });
         const items = (o.items || []).map(it => ({
           name: it.item_name || it.product_name,
           quantity: it.quantity || 1,

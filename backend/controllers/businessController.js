@@ -84,6 +84,19 @@ class BusinessController {
     }
   }
 
+  // Get application history for user
+  async getApplicationHistory(req, res) {
+    try {
+      const userId = req.user.userId;
+      const db = dbConfig.db;
+      const { rows } = await db.query('SELECT * FROM business_applications WHERE user_id = $1 ORDER BY applied_at DESC LIMIT 20', [userId]);
+      res.json({ success:true, data:{ applications: rows } });
+    } catch (e) {
+      console.error('Get business application history error:', e);
+      res.status(500).json({ success:false, message:'Failed to fetch history' });
+    }
+  }
+
   // Create business (after approval)
   async createBusiness(req, res) {
     try {

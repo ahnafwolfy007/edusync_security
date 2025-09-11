@@ -13,6 +13,7 @@ const {
 } = require('../controllers/lostFoundController');
 const { authenticateToken } = require('../middlewares/auth');
 const { upload } = require('../middlewares/upload');
+const { requireFields, rateLimit } = require('../middlewares/validationMiddleware');
 
 // Public routes
 router.get('/', getAllLostFoundItems);
@@ -23,7 +24,7 @@ router.get('/:id', getLostFoundItemById);
 router.use(authenticateToken);
 
 // Create lost/found item with images
-router.post('/', upload.array('images', 5), createLostFoundItem);
+router.post('/', rateLimit({ max:20, windowMs:60000 }), requireFields(['title','description']), upload.array('images', 5), createLostFoundItem);
 
 // Get user's lost/found items
 router.get('/user/my-items', getUserLostFoundItems);
@@ -35,7 +36,7 @@ router.post('/:id/found', markAsFound);
 router.post('/:id/claim', claimItem);
 
 // Update and delete items
-router.put('/:id', upload.array('images', 5), updateLostFoundItem);
+router.put('/:id', rateLimit({ max:40, windowMs:60000 }), upload.array('images', 5), updateLostFoundItem);
 router.delete('/:id', deleteLostFoundItem);
 
 module.exports = router;
