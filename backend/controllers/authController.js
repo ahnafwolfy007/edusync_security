@@ -360,25 +360,14 @@ class AuthController {
 
       // Simple password verification using new verifyPasswordHash function
       let isPasswordValid = false;
-      let needsUpgrade = false;
 
       if (user.password_hash) {
         console.log('[Login] Stored hash:', user.password_hash);
         console.log('[Login] Testing password verification...');
         
         // Use the new verifyPasswordHash function which handles both legacy and new formats
-        const verifyResult = verifyPasswordHash(password, user.password_hash, user.email.toLowerCase());
-        
-        if (verifyResult === true) {
-          isPasswordValid = true;
-          console.log('[Login] Password verification result: true (new method)');
-        } else if (verifyResult && verifyResult.verified) {
-          isPasswordValid = true;
-          needsUpgrade = true;
-          console.log('[Login] Password verification result: true (legacy, needs upgrade)');
-        } else {
-          console.log('[Login] Password verification result: false');
-        }
+        isPasswordValid = verifyPasswordHash(password, user.password_hash, user.email.toLowerCase());
+        console.log('[Login] Password verification result:', isPasswordValid);
       }
 
       if (!isPasswordValid) {
@@ -386,18 +375,6 @@ class AuthController {
           success: false,
           message: 'Invalid email or password'
         });
-      }
-
-      // If password needs upgrade, rehash with new method
-      if (needsUpgrade) {
-        try {
-          console.log('[Login] Upgrading password to new hash method...');
-          const newHash = hashPasswordWithEmail(password, user.email.toLowerCase());
-          await db.query('UPDATE users SET password_hash = $1, updated_at = NOW() WHERE user_id = $2', [newHash, user.user_id]);
-          console.log('[Login] Password upgraded successfully');
-        } catch (upgradeErr) {
-          console.warn('[Login] Password upgrade failed:', upgradeErr.message);
-        }
       }
 
       // Upsert user statistics (login count & last_login)
