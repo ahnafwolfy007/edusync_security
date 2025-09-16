@@ -441,10 +441,10 @@ const Register = () => {
       </div>
 
       <div className="form-group">
-        <label htmlFor="password" className="form-label">Password</label>
+        <label htmlFor="password" className="block text-sm font-medium text-white mb-2">Password</label>
         <div className="relative">
           <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-            <FiLock className="h-5 w-5 text-gray-400" />
+            <FiLock className="h-5 w-5 text-blue-300" />
           </div>
           <input
             id="password"
@@ -453,7 +453,7 @@ const Register = () => {
             required
             value={formData.password}
             onChange={handleChange}
-            className="form-input pl-10 pr-10"
+            className="w-full pl-10 pr-12 py-3 bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl text-white placeholder-blue-200 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
             placeholder="Create a password"
           />
           <button
@@ -462,32 +462,32 @@ const Register = () => {
             onClick={() => setShowPassword(!showPassword)}
           >
             {showPassword ? (
-              <FiEyeOff className="h-5 w-5 text-gray-400 hover:text-gray-600" />
+              <FiEyeOff className="h-5 w-5 text-blue-300 hover:text-white transition-colors" />
             ) : (
-              <FiEye className="h-5 w-5 text-gray-400 hover:text-gray-600" />
+              <FiEye className="h-5 w-5 text-blue-300 hover:text-white transition-colors" />
             )}
           </button>
         </div>
         <div className="mt-2">
-          <div className="w-full h-2 bg-gray-200 rounded overflow-hidden">
+          <div className="w-full h-2 bg-white/20 rounded overflow-hidden">
             <div
               className={`h-2 transition-all duration-300 ${strengthMeta.color}`}
               style={{ width: `${strengthMeta.bar}%` }}
             />
           </div>
-          <p className="text-xs mt-1 font-medium text-gray-600 flex items-center">
-            Strength: <span className="ml-1 text-gray-900">{strengthMeta.label}</span>
+          <p className="text-xs mt-1 font-medium text-blue-200 flex items-center">
+            Strength: <span className="ml-1 text-white font-semibold">{strengthMeta.label}</span>
           </p>
-          <p className="form-help">Min 8 chars, include upper, number, symbol. 3 of 4 rules needed.</p>
+          <p className="text-xs text-blue-200 mt-1">Min 8 chars, include upper, number, symbol. 3 of 4 rules needed.</p>
         </div>
-  {errors.password && <p className="text-xs text-red-600 mt-1">{errors.password}</p>}
+        {errors.password && <p className="text-xs text-red-300 mt-1 font-medium">{errors.password}</p>}
       </div>
 
-  <div className="form-group">
-        <label htmlFor="confirmPassword" className="form-label">Confirm Password</label>
+      <div className="form-group">
+        <label htmlFor="confirmPassword" className="block text-sm font-medium text-white mb-2">Confirm Password</label>
         <div className="relative">
           <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-            <FiLock className="h-5 w-5 text-gray-400" />
+            <FiLock className="h-5 w-5 text-blue-300" />
           </div>
           <input
             id="confirmPassword"
@@ -496,7 +496,7 @@ const Register = () => {
             required
             value={formData.confirmPassword}
             onChange={handleChange}
-            className="form-input pl-10 pr-10"
+            className="w-full pl-10 pr-12 py-3 bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl text-white placeholder-blue-200 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
             placeholder="Confirm your password"
           />
           <button
@@ -505,51 +505,57 @@ const Register = () => {
             onClick={() => setShowConfirmPassword(!showConfirmPassword)}
           >
             {showConfirmPassword ? (
-              <FiEyeOff className="h-5 w-5 text-gray-400 hover:text-gray-600" />
+              <FiEyeOff className="h-5 w-5 text-blue-300 hover:text-white transition-colors" />
             ) : (
-              <FiEye className="h-5 w-5 text-gray-400 hover:text-gray-600" />
+              <FiEye className="h-5 w-5 text-blue-300 hover:text-white transition-colors" />
             )}
           </button>
         </div>
-  {errors.confirmPassword && <p className="text-xs text-red-600 mt-1">{errors.confirmPassword}</p>}
+        {errors.confirmPassword && <p className="text-xs text-red-300 mt-1 font-medium">{errors.confirmPassword}</p>}
       </div>
 
       <div className="space-y-4">
-        <div className="flex items-start">
+        <motion.div 
+          whileHover={{ scale: 1.01 }}
+          className="flex items-start p-3 rounded-xl bg-white/5 backdrop-blur-sm border border-white/10 hover:bg-white/10 transition-all duration-200"
+        >
           <input
             id="agreeToTerms"
             name="agreeToTerms"
             type="checkbox"
             checked={formData.agreeToTerms}
             onChange={handleChange}
-            className="mt-1 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+            className="mt-1 h-4 w-4 text-blue-600 focus:ring-blue-500 border-white/30 rounded bg-white/10"
           />
-          <label htmlFor="agreeToTerms" className="ml-2 text-sm text-gray-900">
+          <label htmlFor="agreeToTerms" className="ml-3 text-sm text-white">
             I agree to the{' '}
-            <Link to="/terms" className="text-blue-600 hover:text-blue-500">
+            <Link to="/terms" className="text-blue-300 hover:text-blue-200 underline font-medium">
               Terms of Service
             </Link>
           </label>
-        </div>
-  {errors.agreeToTerms && <p className="text-xs text-red-600 -mt-2">{errors.agreeToTerms}</p>}
+        </motion.div>
+        {errors.agreeToTerms && <p className="text-xs text-red-300 -mt-2 font-medium">{errors.agreeToTerms}</p>}
 
-        <div className="flex items-start">
+        <motion.div 
+          whileHover={{ scale: 1.01 }}
+          className="flex items-start p-3 rounded-xl bg-white/5 backdrop-blur-sm border border-white/10 hover:bg-white/10 transition-all duration-200"
+        >
           <input
             id="agreeToPrivacy"
             name="agreeToPrivacy"
             type="checkbox"
             checked={formData.agreeToPrivacy}
             onChange={handleChange}
-            className="mt-1 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+            className="mt-1 h-4 w-4 text-blue-600 focus:ring-blue-500 border-white/30 rounded bg-white/10"
           />
-          <label htmlFor="agreeToPrivacy" className="ml-2 text-sm text-gray-900">
+          <label htmlFor="agreeToPrivacy" className="ml-3 text-sm text-white">
             I agree to the{' '}
-            <Link to="/privacy" className="text-blue-600 hover:text-blue-500">
+            <Link to="/privacy" className="text-blue-300 hover:text-blue-200 underline font-medium">
               Privacy Policy
             </Link>
           </label>
-        </div>
-  {errors.agreeToPrivacy && <p className="text-xs text-red-600 -mt-2">{errors.agreeToPrivacy}</p>}
+        </motion.div>
+        {errors.agreeToPrivacy && <p className="text-xs text-red-300 -mt-2 font-medium">{errors.agreeToPrivacy}</p>}
       </div>
     </div>
   );

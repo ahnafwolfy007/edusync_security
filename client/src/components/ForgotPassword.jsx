@@ -117,25 +117,34 @@ const ForgotPassword = ({ onBack }) => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-indigo-900 via-purple-900 to-pink-900 relative overflow-hidden flex items-center justify-center p-4">
+      {/* Animated Background Elements */}
+      <div className="absolute inset-0">
+        <div className="absolute top-0 -left-4 w-72 h-72 bg-purple-300 rounded-full mix-blend-multiply filter blur-xl opacity-70 animate-blob"></div>
+        <div className="absolute top-0 -right-4 w-72 h-72 bg-yellow-300 rounded-full mix-blend-multiply filter blur-xl opacity-70 animate-blob animation-delay-2000"></div>
+        <div className="absolute -bottom-8 left-20 w-72 h-72 bg-pink-300 rounded-full mix-blend-multiply filter blur-xl opacity-70 animate-blob animation-delay-4000"></div>
+      </div>
+
       <motion.div
         variants={containerVariants}
         initial="initial"
         animate="animate"
         exit="exit"
         transition={{ duration: 0.5 }}
-        className="w-full max-w-md bg-white rounded-2xl shadow-2xl overflow-hidden"
+        className="w-full max-w-md bg-white/10 backdrop-blur-xl rounded-3xl shadow-2xl border border-white/20 overflow-hidden relative z-10"
       >
         {/* Header */}
-        <div className="bg-gradient-to-r from-indigo-600 to-purple-600 p-6 text-white">
+        <div className="bg-gradient-to-r from-cyan-500 to-purple-600 p-6 text-white">
           <div className="flex items-center justify-between">
-            <button
+            <motion.button
+              whileHover={{ scale: 1.1 }}
+              whileTap={{ scale: 0.9 }}
               onClick={onBack}
               className="p-2 hover:bg-white/20 rounded-lg transition-colors"
             >
               <FiArrowLeft size={20} />
-            </button>
-            <h2 className="text-xl font-bold">Reset Password</h2>
+            </motion.button>
+            <h2 className="text-xl font-bold">🔒 Reset Password</h2>
             <div className="w-8" />
           </div>
           
@@ -143,19 +152,23 @@ const ForgotPassword = ({ onBack }) => {
           <div className="mt-6 flex items-center justify-center space-x-2">
             {['request', 'verify', 'reset', 'success'].map((stepName, index) => (
               <div key={stepName} className="flex items-center">
-                <div
-                  className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium transition-colors ${
+                <motion.div
+                  initial={{ scale: 0.8 }}
+                  animate={{ scale: step === stepName || 
+                    ['request', 'verify', 'reset', 'success'].indexOf(step) > index ? 1 : 0.8 }}
+                  transition={{ duration: 0.3 }}
+                  className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium transition-all duration-300 ${
                     step === stepName || 
                     ['request', 'verify', 'reset', 'success'].indexOf(step) > index
-                      ? 'bg-white text-indigo-600'
-                      : 'bg-white/30 text-white'
+                      ? 'bg-white text-cyan-600 shadow-lg'
+                      : 'bg-white/30 text-white border border-white/50'
                   }`}
                 >
-                  {index + 1}
-                </div>
+                  {index === 3 && step === 'success' ? '✅' : index + 1}
+                </motion.div>
                 {index < 3 && (
                   <div
-                    className={`w-8 h-0.5 mx-1 transition-colors ${
+                    className={`w-8 h-0.5 mx-1 transition-all duration-300 ${
                       ['request', 'verify', 'reset', 'success'].indexOf(step) > index
                         ? 'bg-white'
                         : 'bg-white/30'
@@ -181,29 +194,29 @@ const ForgotPassword = ({ onBack }) => {
                 transition={{ duration: 0.3 }}
               >
                 <div className="text-center mb-6">
-                  <div className="mx-auto w-16 h-16 bg-indigo-100 rounded-full flex items-center justify-center mb-4">
-                    <FiMail className="text-indigo-600" size={32} />
+                  <div className="mx-auto w-16 h-16 bg-gradient-to-br from-cyan-400 to-blue-500 rounded-2xl flex items-center justify-center mb-4">
+                    <FiMail className="text-white" size={32} />
                   </div>
-                  <h3 className="text-xl font-semibold text-gray-900 mb-2">
-                    Forgot Your Password?
+                  <h3 className="text-xl font-semibold text-white mb-2">
+                    Forgot Your Password? 🤔
                   </h3>
-                  <p className="text-gray-600">
+                  <p className="text-purple-200">
                     Enter your email address and we'll send you a reset code.
                   </p>
                 </div>
 
                 <form onSubmit={handleRequestReset} className="space-y-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Email Address
+                    <label className="block text-sm font-medium text-white mb-2">
+                      📧 Email Address
                     </label>
                     <div className="relative">
-                      <FiMail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
+                      <FiMail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-purple-300" size={20} />
                       <input
                         type="email"
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
-                        className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                        className="w-full pl-10 pr-4 py-3 bg-white/10 backdrop-blur-sm border border-white/30 rounded-lg text-white placeholder-purple-200 focus:ring-2 focus:ring-cyan-500 focus:border-transparent transition-all duration-300"
                         placeholder="Enter your email"
                         required
                       />
@@ -215,14 +228,14 @@ const ForgotPassword = ({ onBack }) => {
                     whileTap={{ scale: 0.98 }}
                     type="submit"
                     disabled={loading}
-                    className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 text-white py-3 rounded-lg font-medium hover:from-indigo-700 hover:to-purple-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+                    className="w-full bg-gradient-to-r from-cyan-500 to-purple-600 text-white py-3 rounded-lg font-medium hover:from-cyan-600 hover:to-purple-700 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
                   >
                     {loading ? (
                       <FiRefreshCw className="animate-spin" size={20} />
                     ) : (
                       <>
                         <FiSend size={20} className="mr-2" />
-                        Send Reset Token
+                        Send Reset Token 🚀
                       </>
                     )}
                   </motion.button>
@@ -241,41 +254,41 @@ const ForgotPassword = ({ onBack }) => {
                 transition={{ duration: 0.3 }}
               >
                 <div className="text-center mb-6">
-                  <div className="mx-auto w-16 h-16 bg-yellow-100 rounded-full flex items-center justify-center mb-4">
-                    <FiShield className="text-yellow-600" size={32} />
+                  <div className="mx-auto w-16 h-16 bg-gradient-to-br from-yellow-400 to-orange-500 rounded-2xl flex items-center justify-center mb-4">
+                    <FiShield className="text-white" size={32} />
                   </div>
-                  <h3 className="text-xl font-semibold text-gray-900 mb-2">
-                    Verify Your Code
+                  <h3 className="text-xl font-semibold text-white mb-2">
+                    Verify Your Code 🔐
                   </h3>
-                  <p className="text-gray-600">
+                  <p className="text-purple-200">
                     Enter the 6-digit code sent to your email.
                   </p>
-                  <div className="mt-2 p-3 bg-yellow-50 rounded-lg border border-yellow-200">
-                    <div className="flex items-center text-yellow-800 text-sm">
+                  <div className="mt-2 p-3 bg-yellow-500/20 backdrop-blur-sm rounded-lg border border-yellow-400/30">
+                    <div className="flex items-center text-yellow-200 text-sm">
                       <FiClock size={16} className="mr-2" />
-                      Code expires in 10 minutes
+                      Code expires in 10 minutes ⏰
                     </div>
                   </div>
                 </div>
 
                 {/* Development OTP display */}
                 {devOtp && (
-                  <div className="mb-4 p-3 bg-green-50 rounded-lg border border-green-200">
-                    <p className="text-sm text-green-800 font-medium">Development Mode:</p>
-                    <p className="text-lg text-green-700 font-mono font-bold tracking-wider">{devOtp}</p>
+                  <div className="mb-4 p-3 bg-green-500/20 backdrop-blur-sm rounded-lg border border-green-400/30">
+                    <p className="text-sm text-green-200 font-medium">Development Mode:</p>
+                    <p className="text-lg text-green-100 font-mono font-bold tracking-wider">{devOtp}</p>
                   </div>
                 )}
 
                 <form onSubmit={handleVerifyOtp} className="space-y-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Verification Code
+                    <label className="block text-sm font-medium text-white mb-2">
+                      🔢 Verification Code
                     </label>
                     <input
                       type="text"
                       value={otp}
                       onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent font-mono text-lg text-center tracking-wider"
+                      className="w-full px-4 py-3 bg-white/10 backdrop-blur-sm border border-white/30 rounded-lg text-white placeholder-purple-200 focus:ring-2 focus:ring-cyan-500 focus:border-transparent font-mono text-lg text-center tracking-wider transition-all duration-300"
                       placeholder="Enter 6-digit code"
                       maxLength={6}
                       required
@@ -287,14 +300,14 @@ const ForgotPassword = ({ onBack }) => {
                     whileTap={{ scale: 0.98 }}
                     type="submit"
                     disabled={loading}
-                    className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 text-white py-3 rounded-lg font-medium hover:from-indigo-700 hover:to-purple-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+                    className="w-full bg-gradient-to-r from-cyan-500 to-purple-600 text-white py-3 rounded-lg font-medium hover:from-cyan-600 hover:to-purple-700 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
                   >
                     {loading ? (
                       <FiRefreshCw className="animate-spin" size={20} />
                     ) : (
                       <>
                         <FiShield size={20} className="mr-2" />
-                        Verify Code
+                        Verify Code ✅
                       </>
                     )}
                   </motion.button>
@@ -302,9 +315,9 @@ const ForgotPassword = ({ onBack }) => {
                   <button
                     type="button"
                     onClick={() => setStep('request')}
-                    className="w-full text-indigo-600 hover:text-indigo-700 py-2 text-sm font-medium"
+                    className="w-full text-cyan-300 hover:text-cyan-200 py-2 text-sm font-medium transition-colors"
                   >
-                    Back to Email Entry
+                    ← Back to Email Entry
                   </button>
                 </form>
               </motion.div>
@@ -321,28 +334,28 @@ const ForgotPassword = ({ onBack }) => {
                 transition={{ duration: 0.3 }}
               >
                 <div className="text-center mb-6">
-                  <div className="mx-auto w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mb-4">
-                    <FiShield className="text-green-600" size={32} />
+                  <div className="mx-auto w-16 h-16 bg-gradient-to-br from-green-400 to-emerald-500 rounded-2xl flex items-center justify-center mb-4">
+                    <FiShield className="text-white" size={32} />
                   </div>
-                  <h3 className="text-xl font-semibold text-gray-900 mb-2">
-                    Create New Password
+                  <h3 className="text-xl font-semibold text-white mb-2">
+                    Create New Password 🆕
                   </h3>
-                  <p className="text-gray-600">
+                  <p className="text-purple-200">
                     Enter your new password below.
                   </p>
                 </div>
 
                 <form onSubmit={handleResetPassword} className="space-y-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      New Password
+                    <label className="block text-sm font-medium text-white mb-2">
+                      🔒 New Password
                     </label>
                     <div className="relative">
                       <input
                         type={showPassword ? 'text' : 'password'}
                         value={newPassword}
                         onChange={(e) => setNewPassword(e.target.value)}
-                        className="w-full px-4 py-3 pr-12 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                        className="w-full px-4 py-3 pr-12 bg-white/10 backdrop-blur-sm border border-white/30 rounded-lg text-white placeholder-purple-200 focus:ring-2 focus:ring-cyan-500 focus:border-transparent transition-all duration-300"
                         placeholder="Enter new password"
                         required
                         minLength={6}
@@ -350,7 +363,7 @@ const ForgotPassword = ({ onBack }) => {
                       <button
                         type="button"
                         onClick={() => setShowPassword(!showPassword)}
-                        className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                        className="absolute right-3 top-1/2 transform -translate-y-1/2 text-purple-300 hover:text-white transition-colors"
                       >
                         {showPassword ? <FiEyeOff size={20} /> : <FiEye size={20} />}
                       </button>
@@ -358,15 +371,15 @@ const ForgotPassword = ({ onBack }) => {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Confirm Password
+                    <label className="block text-sm font-medium text-white mb-2">
+                      🔒 Confirm Password
                     </label>
                     <div className="relative">
                       <input
                         type={showConfirmPassword ? 'text' : 'password'}
                         value={confirmPassword}
                         onChange={(e) => setConfirmPassword(e.target.value)}
-                        className="w-full px-4 py-3 pr-12 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                        className="w-full px-4 py-3 pr-12 bg-white/10 backdrop-blur-sm border border-white/30 rounded-lg text-white placeholder-purple-200 focus:ring-2 focus:ring-cyan-500 focus:border-transparent transition-all duration-300"
                         placeholder="Confirm new password"
                         required
                         minLength={6}
@@ -374,7 +387,7 @@ const ForgotPassword = ({ onBack }) => {
                       <button
                         type="button"
                         onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                        className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                        className="absolute right-3 top-1/2 transform -translate-y-1/2 text-purple-300 hover:text-white transition-colors"
                       >
                         {showConfirmPassword ? <FiEyeOff size={20} /> : <FiEye size={20} />}
                       </button>
@@ -383,17 +396,17 @@ const ForgotPassword = ({ onBack }) => {
 
                   {/* Password strength indicator */}
                   <div className="space-y-2">
-                    <div className="text-xs text-gray-600">Password strength:</div>
+                    <div className="text-xs text-purple-200">Password strength:</div>
                     <div className="space-y-1">
                       <div className={`flex items-center text-xs ${
-                        newPassword.length >= 6 ? 'text-green-600' : 'text-gray-400'
+                        newPassword.length >= 6 ? 'text-green-300' : 'text-purple-300'
                       }`}>
                         <FiCheckCircle size={12} className="mr-1" />
                         At least 6 characters
                       </div>
                       <div className={`flex items-center text-xs ${
                         newPassword === confirmPassword && confirmPassword !== '' 
-                          ? 'text-green-600' : 'text-gray-400'
+                          ? 'text-green-300' : 'text-purple-300'
                       }`}>
                         <FiCheckCircle size={12} className="mr-1" />
                         Passwords match
@@ -406,14 +419,14 @@ const ForgotPassword = ({ onBack }) => {
                     whileTap={{ scale: 0.98 }}
                     type="submit"
                     disabled={loading}
-                    className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 text-white py-3 rounded-lg font-medium hover:from-indigo-700 hover:to-purple-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+                    className="w-full bg-gradient-to-r from-green-500 to-emerald-600 text-white py-3 rounded-lg font-medium hover:from-green-600 hover:to-emerald-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
                   >
                     {loading ? (
                       <FiRefreshCw className="animate-spin" size={20} />
                     ) : (
                       <>
                         <FiShield size={20} className="mr-2" />
-                        Reset Password
+                        Reset Password 🎉
                       </>
                     )}
                   </motion.button>
@@ -432,13 +445,13 @@ const ForgotPassword = ({ onBack }) => {
                 transition={{ duration: 0.3 }}
               >
                 <div className="text-center">
-                  <div className="mx-auto w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mb-4">
-                    <FiCheckCircle className="text-green-600" size={32} />
+                  <div className="mx-auto w-16 h-16 bg-gradient-to-br from-green-400 to-emerald-500 rounded-2xl flex items-center justify-center mb-4">
+                    <FiCheckCircle className="text-white" size={32} />
                   </div>
-                  <h3 className="text-xl font-semibold text-gray-900 mb-2">
-                    Password Reset Successfully!
+                  <h3 className="text-xl font-semibold text-white mb-2">
+                    🎉 Password Reset Successfully!
                   </h3>
-                  <p className="text-gray-600 mb-6">
+                  <p className="text-purple-200 mb-6">
                     Your password has been reset. You can now login with your new password.
                   </p>
                   
@@ -446,9 +459,9 @@ const ForgotPassword = ({ onBack }) => {
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
                     onClick={onBack}
-                    className="w-full bg-gradient-to-r from-green-600 to-emerald-600 text-white py-3 rounded-lg font-medium hover:from-green-700 hover:to-emerald-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
+                    className="w-full bg-gradient-to-r from-green-500 to-emerald-600 text-white py-3 rounded-lg font-medium hover:from-green-600 hover:to-emerald-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
                   >
-                    Back to Login
+                    Back to Login 🚀
                   </motion.button>
                 </div>
               </motion.div>
@@ -462,10 +475,10 @@ const ForgotPassword = ({ onBack }) => {
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -10 }}
-                className="mt-4 p-3 bg-green-50 border border-green-200 rounded-lg flex items-center"
+                className="mt-4 p-3 bg-green-500/20 backdrop-blur-sm border border-green-400/30 rounded-lg flex items-center"
               >
-                <FiCheckCircle className="text-green-600 mr-2" size={16} />
-                <span className="text-green-800 text-sm">{message}</span>
+                <FiCheckCircle className="text-green-300 mr-2" size={16} />
+                <span className="text-green-100 text-sm">{message}</span>
               </motion.div>
             )}
 
@@ -474,10 +487,10 @@ const ForgotPassword = ({ onBack }) => {
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -10 }}
-                className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg flex items-center"
+                className="mt-4 p-3 bg-red-500/20 backdrop-blur-sm border border-red-400/30 rounded-lg flex items-center"
               >
-                <FiAlertCircle className="text-red-600 mr-2" size={16} />
-                <span className="text-red-800 text-sm">{error}</span>
+                <FiAlertCircle className="text-red-300 mr-2" size={16} />
+                <span className="text-red-100 text-sm">{error}</span>
               </motion.div>
             )}
           </AnimatePresence>

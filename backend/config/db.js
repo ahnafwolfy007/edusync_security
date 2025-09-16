@@ -3,6 +3,11 @@ const { Pool } = require('pg');
 // PostgreSQL Database Configuration for Aiven.io
 class Database {
   constructor() {
+    // Defensive: show which env vars are present (sanitized)
+    const missing = ['DB_HOST','DB_PORT','DB_NAME','DB_USER','DB_PASSWORD'].filter(k => !process.env[k]);
+    if (missing.length) {
+      console.warn('⚠️ Missing DB env vars:', missing.join(', '));
+    }
     // Initialize PostgreSQL connection pool for local database
     this.pool = new Pool({
       host: process.env.DB_HOST || 'localhost',
@@ -10,7 +15,6 @@ class Database {
       database: process.env.DB_NAME || 'edusync',
       user: process.env.DB_USER || 'postgres',
       password: process.env.DB_PASSWORD || 'your_postgres_password',
-      // Remove SSL for local development
       ssl: false,
       connectionTimeoutMillis: 20000,
       idleTimeoutMillis: 30000,
@@ -31,7 +35,11 @@ class Database {
       client.release();
       return true;
     } catch (error) {
-      console.error('❌ Database connection failed:', error.message);
+      if (error.code === '28P01') {
+        console.error('❌ Authentication failed: Check DB_USER/DB_PASSWORD in .env (user=' + (process.env.DB_USER||'postgres') + ')');
+      } else {
+        console.error('❌ Database connection failed:', error.message);
+      }
       throw error;
     }
   }

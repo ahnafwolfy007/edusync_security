@@ -8,6 +8,16 @@
 require('dotenv').config();
 const dbConfig = require('./config/db');
 
+async function ensureBaseRoles(db) {
+  const baseRoles = ['admin','user','moderator'];
+  for (const r of baseRoles) {
+    await db.query('INSERT INTO roles (role_name) VALUES ($1) ON CONFLICT (role_name) DO NOTHING', [r]);
+  }
+  const res = await db.query('SELECT role_id, role_name FROM roles');
+  const roleMap = Object.fromEntries(res.rows.map(r=>[r.role_name, r.role_id]));
+  return roleMap;
+}
+
 async function testDatabaseConnection() {
   console.log('🔗 Testing EduSync Database Connection...\n');
   
@@ -15,6 +25,9 @@ async function testDatabaseConnection() {
     // Initialize database connection
     console.log('⏳ Initializing database connection...');
     const db = await dbConfig.init();
+    
+    console.log('⏳ Ensuring base roles...');
+    const roles = await ensureBaseRoles(db);
     
     // Test basic query
     console.log('⏳ Testing basic query...');
@@ -45,7 +58,10 @@ async function testDatabaseConnection() {
     
     // Test CRUD operations
     console.log('⏳ Testing CRUD operations...');
-    
+    const userRoleId = roles.user;
+    if (!userRoleId) {
+      throw new Error('Base role "user" missing even after ensure step.');
+    }
     // Create a test user
     const testUser = await db.create('users', {
       full_name: 'Test User',
@@ -53,7 +69,8 @@ async function testDatabaseConnection() {
       password_hash: 'test_hash',
       phone: '+8801700000000',
       institution: 'Test University',
-      location: 'Test City'
+      location: 'Test City',
+      role_id: userRoleId
     });
     console.log('✅ User created successfully:', testUser.email);
     
