@@ -1,16 +1,6 @@
-// aaa_7.js - very raw hash function with verifier (educational only, NOT secure!)
+// Custom hash function aaa_7 (educational only, NOT secure!)
 
-// Simple salt generator (random hex string) - retained for any legacy use
-function generateSalt(length = 16) {
-  const chars = "abcdef0123456789";
-  let salt = "";
-  for (let i = 0; i < length * 2; i++) {
-    salt += chars[Math.floor(Math.random() * chars.length)];
-  }
-  return salt;
-}
-
-// Deterministic salt derived from email (requested). NOTE: Reduces security (predictable), educational only.
+// Deterministic salt derived from email
 function generateSaltFromEmail(email) {
   if (!email || typeof email !== 'string') return '0';
   email = email.trim().toLowerCase();
@@ -21,7 +11,7 @@ function generateSaltFromEmail(email) {
   return saltValue.toString(16); // hex string
 }
 
-// Mixing function (adds + rotates bits)
+// Mixing function
 function mixBytes(a, b, c, d) {
   a = (a + b) & 0xFF;
   a ^= ((d >>> 3) | (d << 5)) & 0xFF;
@@ -38,13 +28,13 @@ function mixBytes(a, b, c, d) {
   return [a, b, c, d];
 }
 
-// Very raw hash function
+// Core hash function
 function aaa_7(input, salt = null, workFactor = 500, outputBits = 128) {
   if (![64, 128, 256].includes(outputBits)) {
     throw new Error("Output bits must be 64, 128, or 256");
   }
 
-  // If no salt provided, generate from email (must be passed separately)
+  // If no salt provided, generate from email
   if (salt === null) {
     throw new Error("Salt is required - use generateSaltFromEmail(email) to generate it");
   }
@@ -77,7 +67,7 @@ function aaa_7(input, salt = null, workFactor = 500, outputBits = 128) {
         state[3] ^ chunk[3]
       );
 
-      // *** ASCII transformation step ***
+      // ASCII transformation step
       let asciiShift = combined.charCodeAt(i % combined.length);
       mixed = mixed.map(val => (val + asciiShift) & 0xFF);
 
@@ -88,7 +78,7 @@ function aaa_7(input, salt = null, workFactor = 500, outputBits = 128) {
       state[3] = (state[3] + mixed[3]) & 0xFF;
     }
 
-    // Final extra mixing per iteration
+    // Final mixing per iteration
     state = mixBytes(state[0], state[1], state[2], state[3]);
   }
 
@@ -119,7 +109,7 @@ function verify_aaa_7(input, expectedHash, salt, workFactor = 500, outputBits = 
   return result.hash === expectedHash;
 }
 
-// Hash password with email-based salt and return full format
+// Hash password with email-based salt
 function hashPasswordWithEmail(password, email, workFactor = 1000, outputBits = 128) {
   const salt = generateSaltFromEmail(email);
   const result = aaa_7(password, salt, workFactor, outputBits);
@@ -131,7 +121,6 @@ function verifyPasswordHash(password, hashedPassword, email) {
   try {
     const parts = hashedPassword.split('$');
     if (parts.length !== 5 || parts[0] !== 'aaa_7') {
-      console.log('Invalid hash format in verifyPasswordHash');
       return false;
     }
 
@@ -144,33 +133,27 @@ function verifyPasswordHash(password, hashedPassword, email) {
     if (email) {
       try {
         const emailSalt = generateSaltFromEmail(email);
-        console.log('Testing with email-based salt:', emailSalt);
         const result1 = aaa_7(password, emailSalt, workFactor, outputBits);
         if (result1.hash === storedHash) {
-          console.log('Password verified with email-based salt (new method)');
           return true;
         }
       } catch (err) {
-        console.log('Error testing with email salt:', err.message);
+        // Continue to legacy method
       }
     }
 
     // Then try with the stored salt (legacy random salt method)
     try {
-      console.log('Testing with stored salt (legacy method):', storedSalt);
       const result2 = aaa_7(password, storedSalt, workFactor, outputBits);
       if (result2.hash === storedHash) {
-        console.log('Password verified with stored salt (legacy method) - needs upgrade');
         return { verified: true, needsUpgrade: true, password: password, email: email };
       }
     } catch (err) {
-      console.log('Error testing with stored salt:', err.message);
+      // Continue to failure
     }
 
-    console.log('Password verification failed with both salt methods');
     return false;
   } catch (error) {
-    console.log('Error in verifyPasswordHash:', error.message);
     return false;
   }
 }
@@ -178,7 +161,6 @@ function verifyPasswordHash(password, hashedPassword, email) {
 module.exports = {
   aaa_7,
   verify_aaa_7,
-  generateSalt,
   generateSaltFromEmail,
   hashPasswordWithEmail,
   verifyPasswordHash
