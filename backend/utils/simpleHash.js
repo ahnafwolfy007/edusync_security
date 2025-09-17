@@ -1,5 +1,3 @@
-// Custom hash function aaa_7 (educational only, NOT secure!)
-
 // Deterministic salt derived from email
 function generateSaltFromEmail(email) {
   if (!email || typeof email !== 'string') return '0';
