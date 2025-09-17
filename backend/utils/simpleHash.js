@@ -1,27 +1,27 @@
 // Deterministic salt derived from email
 function generateSaltFromEmail(email) {
   if (!email || typeof email !== 'string') return '0';
-  email = email.trim().toLowerCase();
+  const normalized = email.trim().toLowerCase();
   let saltValue = 0;
-  for (let i = 0; i < email.length; i++) {
-    saltValue = (saltValue * 33 + email.charCodeAt(i)) % 1000000007; // large prime modulus
+  for (let i = 0; i < normalized.length; i++) {
+    saltValue = (saltValue * 33 + normalized.charCodeAt(i)) % 1000000007; // large prime modulus
   }
   return saltValue.toString(16); // hex string
 }
 
-// Mixing function
+// Mixing function (adds + rotates bits)
 function mixBytes(a, b, c, d) {
-  a = (a + b) & 0xFF;
-  a ^= ((d >>> 3) | (d << 5)) & 0xFF;
+  a = (a + b) & 0xff;
+  a ^= ((d >>> 3) | (d << 5)) & 0xff;
 
-  b = (b + c) & 0xFF;
-  b ^= ((a >>> 5) | (a << 3)) & 0xFF;
+  b = (b + c) & 0xff;
+  b ^= ((a >>> 5) | (a << 3)) & 0xff;
 
-  c = (c + d) & 0xFF;
-  c ^= ((b << 7) | (b >>> 1)) & 0xFF;
+  c = (c + d) & 0xff;
+  c ^= ((b << 7) | (b >>> 1)) & 0xff;
 
-  d = (d + a) & 0xFF;
-  d ^= ((c >>> 2) | (c << 6)) & 0xFF;
+  d = (d + a) & 0xff;
+  d ^= ((c >>> 2) | (c << 6)) & 0xff;
 
   return [a, b, c, d];
 }
@@ -29,35 +29,34 @@ function mixBytes(a, b, c, d) {
 // Core hash function
 function aaa_7(input, salt = null, workFactor = 500, outputBits = 128) {
   if (![64, 128, 256].includes(outputBits)) {
-    throw new Error("Output bits must be 64, 128, or 256");
+    throw new Error('Output bits must be 64, 128, or 256');
   }
 
-  // If no salt provided, generate from email
   if (salt === null) {
-    throw new Error("Salt is required - use generateSaltFromEmail(email) to generate it");
+    throw new Error('Salt is required - use generateSaltFromEmail(email) to generate it');
   }
 
   // Convert input string + salt into ASCII array
-  let asciiArr = [];
-  let combined = salt + input;
+  const combined = String(salt) + String(input);
+  const asciiArr = [];
   for (let i = 0; i < combined.length; i++) {
-    asciiArr.push(combined.charCodeAt(i) & 0xFF);
+    asciiArr.push(combined.charCodeAt(i) & 0xff);
   }
 
   // Initial state
-  let state = [0x6A, 0x89, 0xFE, 0x32];
+  let state = [0x6a, 0x89, 0xfe, 0x32];
 
   // Apply work factor loops
   for (let iter = 0; iter < workFactor; iter++) {
     for (let i = 0; i < asciiArr.length; i += 4) {
-      let chunk = [
-        asciiArr[i] || 0,
-        asciiArr[i + 1] || 0,
-        asciiArr[i + 2] || 0,
-        asciiArr[i + 3] || 0
+      const chunk = [
+        asciiArr[i] ?? 0,
+        asciiArr[i + 1] ?? 0,
+        asciiArr[i + 2] ?? 0,
+        asciiArr[i + 3] ?? 0,
       ];
 
-      // Mix with state
+      // Mix current state with chunk
       let mixed = mixBytes(
         state[0] ^ chunk[0],
         state[1] ^ chunk[1],
@@ -65,29 +64,29 @@ function aaa_7(input, salt = null, workFactor = 500, outputBits = 128) {
         state[3] ^ chunk[3]
       );
 
-      // ASCII transformation step
-      let asciiShift = combined.charCodeAt(i % combined.length);
-      mixed = mixed.map(val => (val + asciiShift) & 0xFF);
+      // Add a position-dependent shift from the combined string
+      const asciiShift = combined.charCodeAt(i % combined.length) & 0xff;
+      mixed = mixed.map((val) => (val + asciiShift) & 0xff);
 
       // Update state
-      state[0] = (state[0] + mixed[0]) & 0xFF;
-      state[1] = (state[1] + mixed[1]) & 0xFF;
-      state[2] = (state[2] + mixed[2]) & 0xFF;
-      state[3] = (state[3] + mixed[3]) & 0xFF;
+      state = [
+        (state[0] + mixed[0]) & 0xff,
+        (state[1] + mixed[1]) & 0xff,
+        (state[2] + mixed[2]) & 0xff,
+        (state[3] + mixed[3]) & 0xff,
+      ];
     }
 
     // Final mixing per iteration
     state = mixBytes(state[0], state[1], state[2], state[3]);
   }
 
-  // Decide output length in bytes
-  let outputBytes = outputBits / 8;
-
-  // Expand state into final hash
-  let result = "";
+  // Decide output length in bytes and emit hex
+  const outputBytes = outputBits / 8;
+  let result = '';
   for (let i = 0; i < outputBytes; i++) {
-    let val = state[i % 4];
-    result += val.toString(16).padStart(2, "0");
+    const val = state[i % 4] & 0xff;
+    result += val.toString(16).padStart(2, '0');
     if (i % 4 === 3) {
       state = mixBytes(state[0], state[1], state[2], state[3]);
     }
@@ -95,9 +94,9 @@ function aaa_7(input, salt = null, workFactor = 500, outputBits = 128) {
 
   return {
     hash: result,
-    salt: salt,
-    workFactor: workFactor,
-    outputBits: outputBits
+    salt,
+    workFactor,
+    outputBits,
   };
 }
 
@@ -109,7 +108,7 @@ function verify_aaa_7(input, expectedHash, salt, workFactor = 500, outputBits = 
 
 // Hash password with email-based salt
 function hashPasswordWithEmail(password, email, workFactor = 1000, outputBits = 128) {
-  const salt = generateSaltFromEmail(email);
+  const salt = generateSaltFromEmail(String(email || '').toLowerCase());
   const result = aaa_7(password, salt, workFactor, outputBits);
   return `aaa_7$${workFactor}$${outputBits}$${salt}$${result.hash}`;
 }
@@ -117,41 +116,28 @@ function hashPasswordWithEmail(password, email, workFactor = 1000, outputBits = 
 // Verify password against full hash format
 function verifyPasswordHash(password, hashedPassword, email) {
   try {
+    if (typeof hashedPassword !== 'string') return false;
     const parts = hashedPassword.split('$');
     if (parts.length !== 5 || parts[0] !== 'aaa_7') {
       return false;
     }
 
-    const workFactor = parseInt(parts[1]);
-    const outputBits = parseInt(parts[2]);
+    const workFactor = parseInt(parts[1], 10);
+    const outputBits = parseInt(parts[2], 10);
     const storedSalt = parts[3];
     const storedHash = parts[4];
 
-    // First try with email-based salt (new method)
+    // Try deterministic email-based salt first (new scheme)
     if (email) {
-      try {
-        const emailSalt = generateSaltFromEmail(email);
-        const result1 = aaa_7(password, emailSalt, workFactor, outputBits);
-        if (result1.hash === storedHash) {
-          return true;
-        }
-      } catch (err) {
-        // Continue to legacy method
-      }
+      const emailSalt = generateSaltFromEmail(String(email).toLowerCase());
+      const r1 = aaa_7(password, emailSalt, workFactor, outputBits);
+      if (r1.hash === storedHash) return true;
     }
 
-    // Then try with the stored salt (legacy random salt method)
-    try {
-      const result2 = aaa_7(password, storedSalt, workFactor, outputBits);
-      if (result2.hash === storedHash) {
-        return { verified: true, needsUpgrade: true, password: password, email: email };
-      }
-    } catch (err) {
-      // Continue to failure
-    }
-
-    return false;
-  } catch (error) {
+    // Fallback to stored salt (legacy random-salt or non-deterministic entries)
+    const r2 = aaa_7(password, storedSalt, workFactor, outputBits);
+    return r2.hash === storedHash;
+  } catch (err) {
     return false;
   }
 }
@@ -161,5 +147,5 @@ module.exports = {
   verify_aaa_7,
   generateSaltFromEmail,
   hashPasswordWithEmail,
-  verifyPasswordHash
+  verifyPasswordHash,
 };

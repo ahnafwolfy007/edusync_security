@@ -3,6 +3,7 @@ const router = express.Router();
 const rateLimit = require('express-rate-limit');
 const authController = require('../controllers/authController');
 const { authMiddleware } = require('../middlewares/authMiddleware');
+const {bruteForceGuard} = require('../utils/bruteForceGuard');
 
 // Lightweight rate limiter specifically for OTP requests to prevent abuse
 const otpLimiter = rateLimit({
@@ -17,7 +18,7 @@ const otpLimiter = rateLimit({
 router.post('/register', authController.register);
 router.post('/request-otp', otpLimiter, authController.requestOtp);
 router.post('/verify-otp', authController.verifyOtp);
-router.post('/login', authController.login);
+router.post('/login',bruteForceGuard(), authController.login);
 router.post('/refresh-token', authController.refreshToken);
 router.get('/hash-strategy', authController.hashStrategy);
 // Diagnostic email test (rate limited via global mechanisms if any) - keep public but could restrict by domain later

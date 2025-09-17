@@ -1,3 +1,4 @@
+// src/context/AuthContext.jsx
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import api from '../api';
 import SessionManager from '../utils/SessionManager';
@@ -22,7 +23,7 @@ export const AuthProvider = ({ children }) => {
   useEffect(() => {
     const token = sessionManager.getItem('accessToken');
     const userData = sessionManager.getItem('userData');
-    
+
     if (token && userData) {
       try {
         const parsedUser = JSON.parse(userData);
@@ -41,39 +42,66 @@ export const AuthProvider = ({ children }) => {
         logout();
       }
     }
-    
+
     // Clean up expired sessions from other ports
     sessionManager.cleanupExpiredSessions();
     setLoading(false);
   }, [sessionManager]);
 
+  // Enhanced login with 429 handling
   const login = async (email, password) => {
-    const response = await api.post('/auth/login', { email, password });
-    if (!response?.data?.success) {
-      const msg = response?.data?.message || 'Login failed';
-      return { success: false, message: msg };
+    try {
+      const response = await api.post('/auth/login', { email, password });
+
+      // If API follows { success, message, data }
+      if (!response?.data?.success) {
+        const msg = response?.data?.message || 'Login failed';
+        return { success: false, message: msg };
+      }
+
+      const { user: userData, accessToken, refreshToken } = response.data.data;
+
+      // Store tokens and user data with port-specific keys
+      sessionManager.setItem('accessToken', accessToken);
+      sessionManager.setItem('refreshToken', refreshToken);
+      sessionManager.setItem('userData', JSON.stringify(userData));
+      sessionManager.setItem('userRole', userData.role_name || userData.role);
+
+      // Set default authorization header
+      api.defaults.headers.common['Authorization'] = `Bearer ${accessToken}`;
+
+      const normalized = {
+        ...userData,
+        name: userData.full_name || userData.fullName || userData.name,
+        avatar: userData.profile_picture || userData.avatar
+      };
+      setUser(normalized);
+      setIsAuthenticated(true);
+
+      return { success: true, user: userData };
+    } catch (error) {
+      // Optional small enhancement for clearer messaging on bruteForceGuard 429
+      const status = error?.response?.status;
+      const data = error?.response?.data || {};
+
+      if (status === 429) {
+        // Prefer server message; fall back to using retry_after_ms for UX
+        const ms = Number.isFinite(data?.retry_after_ms) ? data.retry_after_ms : null;
+        const seconds = ms ? Math.ceil(ms / 1000) : null;
+        const msg = data?.message
+          || (seconds ? `Too many login attempts. Try again in ${seconds}s.` : 'Too many login attempts. Try again later.');
+        return { success: false, message: msg };
+      }
+
+      // Keep invalid-credential messaging generic (anti-enumeration)
+      if (status === 401) {
+        return { success: false, message: 'Invalid email or password' };
+      }
+
+      // Fallback for other errors
+      const fallback = data?.message || 'Login failed. Please try again.';
+      return { success: false, message: fallback };
     }
-
-    const { user: userData, accessToken, refreshToken } = response.data.data;
-
-    // Store tokens and user data with port-specific keys
-    sessionManager.setItem('accessToken', accessToken);
-    sessionManager.setItem('refreshToken', refreshToken);
-    sessionManager.setItem('userData', JSON.stringify(userData));
-    sessionManager.setItem('userRole', userData.role_name || userData.role);
-
-    // Set default authorization header
-    api.defaults.headers.common['Authorization'] = `Bearer ${accessToken}`;
-
-    const normalized = { 
-      ...userData, 
-      name: userData.full_name || userData.fullName || userData.name, 
-      avatar: userData.profile_picture || userData.avatar 
-    };
-    setUser(normalized);
-    setIsAuthenticated(true);
-
-    return { success: true, user: userData };
   };
 
   const register = async (userData) => {
@@ -86,42 +114,39 @@ export const AuthProvider = ({ children }) => {
         phone: userData.phone,
         institution: userData.university || userData.institution,
         location: userData.location,
-  role: userData.role || 'student',
-  // Pass through OTP code (required by backend register endpoint)
-  otpCode: userData.otpCode
+        role: userData.role || 'student',
+        // Pass through OTP code (required by backend register endpoint)
+        otpCode: userData.otpCode
       };
 
-      console.log('Sending registration data:', mappedUserData);
-      
       const response = await api.post('/auth/register', mappedUserData);
-      
       if (response.data.success) {
         const { user: newUser, accessToken, refreshToken } = response.data.data;
-        
+
         // Store tokens and user data with port-specific keys
         sessionManager.setItem('accessToken', accessToken);
         sessionManager.setItem('refreshToken', refreshToken);
         sessionManager.setItem('userData', JSON.stringify(newUser));
         sessionManager.setItem('userRole', newUser.role_name || newUser.role);
-        
+
         // Set default authorization header
         api.defaults.headers.common['Authorization'] = `Bearer ${accessToken}`;
-        
-        const normalizedNew = { 
-          ...newUser, 
+
+        const normalizedNew = {
+          ...newUser,
           name: newUser.full_name || newUser.fullName || newUser.name,
           avatar: newUser.profile_picture || newUser.avatar
         };
         setUser(normalizedNew);
         setIsAuthenticated(true);
-        
+
         return { success: true, user: newUser };
       }
-      
+
       return { success: false, message: response.data.message };
     } catch (error) {
       console.error('Registration error:', error);
-      throw error; // Throw the error so the component can handle it
+      throw error; // Let component show its own user-friendly message
     }
   };
 
@@ -133,10 +158,8 @@ export const AuthProvider = ({ children }) => {
     } finally {
       // Clear all stored data for this port only
       sessionManager.clear();
-      
       // Remove authorization header
       delete api.defaults.headers.common['Authorization'];
-      
       setUser(null);
       setIsAuthenticated(false);
     }
@@ -162,14 +185,13 @@ export const AuthProvider = ({ children }) => {
       }
 
       const response = await api.post('/auth/refresh-token', { refreshToken });
-      
       if (response.data.success) {
         const { accessToken } = response.data.data;
         sessionManager.setItem('accessToken', accessToken);
         api.defaults.headers.common['Authorization'] = `Bearer ${accessToken}`;
         return true;
       }
-      
+
       logout();
       return false;
     } catch (error) {
@@ -205,18 +227,15 @@ export const AuthProvider = ({ children }) => {
 
   const checkRole = (requiredRole) => {
     if (!user) return false;
-    
     const roleHierarchy = {
-      'student': 1,
-      'business_owner': 2,
-      'food_vendor': 2,
-      'moderator': 3,
-      'admin': 4
+      student: 1,
+      business_owner: 2,
+      food_vendor: 2,
+      moderator: 3,
+      admin: 4
     };
-
     const userRoleLevel = roleHierarchy[user.role_name] || 0;
     const requiredRoleLevel = roleHierarchy[requiredRole] || 0;
-
     return userRoleLevel >= requiredRoleLevel;
   };
 

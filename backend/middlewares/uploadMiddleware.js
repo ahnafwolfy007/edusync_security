@@ -1,6 +1,7 @@
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const InputSanitizer = require('../utils/inputSanitization');
 
 // Ensure upload directories exist
 const ensureUploadDirs = () => {
@@ -94,7 +95,21 @@ const storage = multer.diskStorage({
 
 // File filter function
 const fileFilter = (req, file, cb) => {
-  // Check file type
+  // Sanitize filename
+  const sanitizedFilename = InputSanitizer.sanitizeFilename(file.originalname);
+  if (!sanitizedFilename) {
+    return cb(new Error('Invalid filename'), false);
+  }
+  
+  // Validate file type by extension
+  const allowedExtensions = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'pdf', 'doc', 'docx'];
+  const isValidType = InputSanitizer.validateFileType(sanitizedFilename, allowedExtensions);
+  
+  if (!isValidType) {
+    return cb(new Error('Invalid file type. Only images and documents are allowed.'), false);
+  }
+
+  // Check MIME type as secondary validation
   const allowedMimeTypes = [
     'image/jpeg',
     'image/png',

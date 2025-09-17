@@ -2,6 +2,8 @@ const jwt = require('jsonwebtoken');
 const dbConfig = require('../config/db');
 const authConfig = require('../config/auth');
 const { hashPasswordWithEmail, verifyPasswordHash } = require('../utils/simpleHash');
+const { recordBruteForceResult} = require('../utils/bruteForceGuard');
+const InputSanitizer = require('../utils/inputSanitization');
 const ADMIN_VERIFICATION_EMAIL = (process.env.ADMIN_VERIFICATION_EMAIL || 'dishchord3@gmail.com').toLowerCase();
 const ADMIN_OFFICIAL_EMAIL = (process.env.ADMIN_OFFICIAL_EMAIL || '').toLowerCase();
 const MODERATOR_OFFICIAL_EMAIL = (process.env.MODERATOR_OFFICIAL_EMAIL || '').toLowerCase();
@@ -28,7 +30,7 @@ class AuthController {
       } catch(_) {}
 
       // Accept 'name' alias from frontend
-      const effectiveFullName = fullName || req.body.name;
+      let effectiveFullName = fullName || req.body.name;
 
       // Validation
   if (!effectiveFullName || !email || !password) {
@@ -327,122 +329,135 @@ class AuthController {
 
   // User login
   async login(req, res) {
+
+  // Brute-force control: this middleware must run BEFORE this handler in the router.
+  // Example wiring (route file):
+  // router.post('/login', bruteForceGuard(), (req, res) => authController.login(req, res));
+  // The guard attaches per-request context into res.locals._bf for recording outcomes.
+  const bfCtx = res.locals._bf; // context from guard (per account, per IP, per account+IP) [guard must precede handler]
+
     try {
       const { email, password } = req.body;
 
-      // Validation
+      // Basic validation: ensure required fields are present (avoid extra detail leaks)
       if (!email || !password) {
         return res.status(400).json({
           success: false,
           message: 'Email and password are required'
         });
       }
+      
+      // Only block obviously malicious patterns, not valid emails
+      if (InputSanitizer.validateEmail(email) === false) {
+        recordBruteForceResult({ success: false }, bfCtx);
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid email format'
+        });
+      }
+
+      // Basic password length check (don't sanitize password for login)
+      if (password.length < 6 || password.length > 128) {
+        recordBruteForceResult({ success: false }, bfCtx);
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid password format'
+        });
+      }
 
       const db = dbConfig.db;
 
-      // Find user with role information
-      const userResult = await db.query(
-        `SELECT u.*, r.role_name 
-         FROM users u 
-         JOIN roles r ON u.role_id = r.role_id 
-         WHERE u.email = $1`,
-        [email.toLowerCase()]
-      );
+    // Fetch user with role info (no difference in response message on failure to prevent enumeration)
+    const userResult = await db.query(
+      `SELECT u.*, r.role_name
+       FROM users u
+       JOIN roles r ON u.role_id = r.role_id
+       WHERE u.email = $1`,
+      [email.toLowerCase()]
+    );
 
-      if (userResult.rows.length === 0) {
-        return res.status(401).json({
-          success: false,
-          message: 'Invalid email or password'
-        });
-      }
-
-      const user = userResult.rows[0];
-
-      // Simple password verification using new verifyPasswordHash function
-      let isPasswordValid = false;
-      let needsUpgrade = false;
-
-      if (user.password_hash) {
-        console.log('[Login] Stored hash:', user.password_hash);
-        console.log('[Login] Testing password verification...');
-        
-        // Use the new verifyPasswordHash function which handles both legacy and new formats
-        const verifyResult = verifyPasswordHash(password, user.password_hash, user.email.toLowerCase());
-        
-        if (verifyResult === true) {
-          isPasswordValid = true;
-          console.log('[Login] Password verification result: true (new method)');
-        } else if (verifyResult && verifyResult.verified) {
-          isPasswordValid = true;
-          needsUpgrade = true;
-          console.log('[Login] Password verification result: true (legacy, needs upgrade)');
-        } else {
-          console.log('[Login] Password verification result: false');
-        }
-      }
-
-      if (!isPasswordValid) {
-        return res.status(401).json({
-          success: false,
-          message: 'Invalid email or password'
-        });
-      }
-
-      // If password needs upgrade, rehash with new method
-      if (needsUpgrade) {
-        try {
-          console.log('[Login] Upgrading password to new hash method...');
-          const newHash = hashPasswordWithEmail(password, user.email.toLowerCase());
-          await db.query('UPDATE users SET password_hash = $1, updated_at = NOW() WHERE user_id = $2', [newHash, user.user_id]);
-          console.log('[Login] Password upgraded successfully');
-        } catch (upgradeErr) {
-          console.warn('[Login] Password upgrade failed:', upgradeErr.message);
-        }
-      }
-
-      // Upsert user statistics (login count & last_login)
-      try {
-        await db.query(`
-          INSERT INTO user_statistics (user_id, login_count, last_login)
-          VALUES ($1, 1, NOW())
-          ON CONFLICT (user_id)
-          DO UPDATE SET login_count = user_statistics.login_count + 1, last_login = NOW()
-        `, [user.user_id]);
-      } catch (statsErr) {
-        console.warn('[Login] Failed to update user_statistics:', statsErr.message);
-      }
-
-      // Generate tokens
-      const tokenPayload = {
-        userId: user.user_id,
-        email: user.email,
-        role: user.role_name
-      };
-
-      const accessToken = authConfig.generateToken(tokenPayload);
-      const refreshToken = authConfig.generateRefreshToken(tokenPayload);
-
-      // Remove password from response
-      const { password_hash, ...userData } = user;
-
-      res.json({
-        success: true,
-        message: 'Login successful',
-        data: {
-          user: userData,
-          accessToken,
-          refreshToken
-        }
-      });
-
-    } catch (error) {
-      console.error('Login error:', error);
-      res.status(500).json({
+    // If no user, still record a failed attempt so enumeration/bruteforce is throttled uniformly
+    if (userResult.rows.length === 0) {
+      recordBruteForceResult({ success: false }, bfCtx); // note failure for non-existent account as well
+      return res.status(401).json({
         success: false,
-        message: 'Internal server error during login'
+        message: 'Invalid email or password'
       });
     }
+
+    // Extract user object (first row)
+    const user = userResult.rows[0];
+
+    // Password verification (custom verifier supports legacy/new formats)
+    // Keep timing and messaging generic to avoid oracle leaks
+    let isPasswordValid = false;
+    if (user.password_hash) {
+      // Verify against stored hash using the deterministic email salt scheme (educational)
+      isPasswordValid = verifyPasswordHash(
+        password,
+        user.password_hash,
+        user.email.toLowerCase()
+      );
+    }
+
+    // On invalid password: record failure with the guard and return generic response
+    if (!isPasswordValid) {
+      recordBruteForceResult({ success: false }, bfCtx); // record failure (progressive cooldown/lock)
+      return res.status(401).json({
+        success: false,
+        message: 'Invalid email or password'
+      });
+    }
+
+    // On success: reset counters for this account/IP (guard clears cooldown/lock state)
+    recordBruteForceResult({ success: true }, bfCtx);
+
+    // Bookkeeping: upsert statistics (login_count and last_login)
+    try {
+      await db.query(
+        `INSERT INTO user_statistics (user_id, login_count, last_login)
+         VALUES ($1, 1, NOW())
+         ON CONFLICT (user_id)
+         DO UPDATE SET login_count = user_statistics.login_count + 1, last_login = NOW()`,
+        [user.user_id]
+      );
+    } catch (statsErr) {
+      // Non-fatal: continue login even if metrics fail
+      console.warn('[Login] Failed to update user_statistics:', statsErr.message);
+    }
+
+    // Issue tokens (short‑lived access + long‑lived refresh via your authConfig)
+    const tokenPayload = {
+      userId: user.user_id,
+      email: user.email,
+      role: user.role_name
+    };
+    const accessToken = authConfig.generateToken(tokenPayload);
+    const refreshToken = authConfig.generateRefreshToken(tokenPayload);
+
+    // Remove sensitive fields from response
+    const { password_hash, ...userData } = user;
+
+    // Success response (keep structure consistent for frontend)
+    return res.json({
+      success: true,
+      message: 'Login successful',
+      data: {
+        user: userData,
+        accessToken,
+        refreshToken
+      }
+    });
+  } catch (error) {
+    // Generic catch-all to avoid leaking internals (stack traces, SQL, etc.)
+    console.error('Login error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Internal server error during login'
+    });
   }
+}
+
 
   // Refresh token
   async refreshToken(req, res) {
@@ -470,7 +485,7 @@ class AuthController {
         [decoded.userId]
       );
       
-              console.warn('[Login] Password verification failed after all legacy strategies. Stored format:', user.password_hash);
+      console.warn('[Login] Password verification failed after all legacy strategies. Stored format:', user.password_hash);
       const user = userResult.rows[0];
 
       // Generate new access token

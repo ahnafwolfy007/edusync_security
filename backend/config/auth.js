@@ -106,11 +106,11 @@ const authConfig = {
 
   // Password validation rules
   passwordValidation: {
-    minLength: 6,
-    requireUppercase: false,
-    requireLowercase: false,
-    requireNumbers: false,
-    requireSpecialChars: false
+    minLength: 8,
+    requireUppercase: true,
+    requireLowercase: true,
+    requireNumbers: true,
+    requireSpecialChars: true
   },
 
   // Validate password against rules
