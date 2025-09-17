@@ -11,6 +11,7 @@ require('dotenv').config();
 // Import configurations
 const dbConfig = require('./config/db');
 const authConfig = require('./config/auth');
+const InputSanitizer = require('./utils/inputSanitization');
 
 // Import routes
 const authRoutes = require('./routes/authRoutes');

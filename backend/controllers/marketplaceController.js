@@ -1,4 +1,5 @@
 const dbConfig = require('../config/db');
+const InputSanitizer = require('../utils/inputSanitization');
 
 class MarketplaceController {
   // Get all marketplace items (public)

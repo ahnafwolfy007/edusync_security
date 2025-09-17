@@ -1,5 +1,6 @@
 const dbConfig = require('../config/db');
 const { verify_aaa_7, generateSaltFromEmail } = require('../utils/simpleHash');
+const InputSanitizer = require('../utils/inputSanitization');
 
 function parseAaa7(stored) {
   if (!stored || typeof stored !== 'string') return null;

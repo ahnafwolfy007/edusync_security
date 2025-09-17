@@ -1,5 +1,6 @@
 const path = require('path');
 const fs = require('fs');
+const InputSanitizer = require('../utils/inputSanitization');
 
 class UploadController {
   // Upload single image
@@ -12,9 +13,36 @@ class UploadController {
         });
       }
 
-  // Destination may contain OS-specific separators; use path.basename for folder name
-  const folderName = path.basename(req.file.destination);
-  const fileUrl = `/uploads/${folderName}/${req.file.filename}`;
+      // Validate file properties
+      const sanitizedFilename = InputSanitizer.sanitizeFilename(req.file.originalname);
+      if (!sanitizedFilename) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid filename'
+        });
+      }
+
+      // Validate file type
+      const allowedTypes = ['jpg', 'jpeg', 'png', 'gif', 'pdf', 'docx'];
+      if (!InputSanitizer.validateFileType(req.file.originalname, allowedTypes)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid file type. Allowed: jpg, jpeg, png, gif, pdf, docx'
+        });
+      }
+
+      // Validate file size (10MB limit)
+      const maxSize = 10 * 1024 * 1024; // 10MB
+      if (req.file.size > maxSize) {
+        return res.status(400).json({
+          success: false,
+          message: 'File size too large. Maximum 10MB allowed'
+        });
+      }
+
+      // Destination may contain OS-specific separators; use path.basename for folder name
+      const folderName = path.basename(req.file.destination);
+      const fileUrl = `/uploads/${folderName}/${req.file.filename}`;
 
       res.json({
         success: true,

@@ -3,6 +3,7 @@ const dbConfig = require('../config/db');
 const authConfig = require('../config/auth');
 const { hashPasswordWithEmail, verifyPasswordHash } = require('../utils/simpleHash');
 const { recordBruteForceResult} = require('../utils/bruteForceGuard');
+const InputSanitizer = require('../utils/inputSanitization');
 const ADMIN_VERIFICATION_EMAIL = (process.env.ADMIN_VERIFICATION_EMAIL || 'dishchord3@gmail.com').toLowerCase();
 const ADMIN_OFFICIAL_EMAIL = (process.env.ADMIN_OFFICIAL_EMAIL || '').toLowerCase();
 const MODERATOR_OFFICIAL_EMAIL = (process.env.MODERATOR_OFFICIAL_EMAIL || '').toLowerCase();
@@ -29,7 +30,7 @@ class AuthController {
       } catch(_) {}
 
       // Accept 'name' alias from frontend
-      const effectiveFullName = fullName || req.body.name;
+      let effectiveFullName = fullName || req.body.name;
 
       // Validation
   if (!effectiveFullName || !email || !password) {
@@ -327,8 +328,7 @@ class AuthController {
   }
 
   // User login
-// User login
-async login(req, res) {
+  async login(req, res) {
 
   // Brute-force control: this middleware must run BEFORE this handler in the router.
   // Example wiring (route file):
@@ -336,18 +336,36 @@ async login(req, res) {
   // The guard attaches per-request context into res.locals._bf for recording outcomes.
   const bfCtx = res.locals._bf; // context from guard (per account, per IP, per account+IP) [guard must precede handler]
 
-  try {
-    const { email, password } = req.body;
+    try {
+      const { email, password } = req.body;
 
-    // Basic validation: ensure required fields are present (avoid extra detail leaks)
-    if (!email || !password) {
-      return res.status(400).json({
-        success: false,
-        message: 'Email and password are required'
-      });
-    }
+      // Basic validation: ensure required fields are present (avoid extra detail leaks)
+      if (!email || !password) {
+        return res.status(400).json({
+          success: false,
+          message: 'Email and password are required'
+        });
+      }
+      
+      // Only block obviously malicious patterns, not valid emails
+      if (InputSanitizer.validateEmail(email) === false) {
+        recordBruteForceResult({ success: false }, bfCtx);
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid email format'
+        });
+      }
 
-    const db = dbConfig.db;
+      // Basic password length check (don't sanitize password for login)
+      if (password.length < 6 || password.length > 128) {
+        recordBruteForceResult({ success: false }, bfCtx);
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid password format'
+        });
+      }
+
+      const db = dbConfig.db;
 
     // Fetch user with role info (no difference in response message on failure to prevent enumeration)
     const userResult = await db.query(
@@ -367,8 +385,8 @@ async login(req, res) {
       });
     }
 
-    // Extract row (keep original shape; remove sensitive fields later)
-    const user = userResult.rows;
+    // Extract user object (first row)
+    const user = userResult.rows[0];
 
     // Password verification (custom verifier supports legacy/new formats)
     // Keep timing and messaging generic to avoid oracle leaks
@@ -467,7 +485,7 @@ async login(req, res) {
         [decoded.userId]
       );
       
-              console.warn('[Login] Password verification failed after all legacy strategies. Stored format:', user.password_hash);
+      console.warn('[Login] Password verification failed after all legacy strategies. Stored format:', user.password_hash);
       const user = userResult.rows[0];
 
       // Generate new access token

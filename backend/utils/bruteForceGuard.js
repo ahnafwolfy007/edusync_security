@@ -6,8 +6,8 @@ const WINDOW_MS = parseInt(process.env.BF_WINDOW_MS || `${10 * 60 * 1000}`); // 
 const MAX_FAILS_ACCOUNT = parseInt(process.env.BF_MAX_FAILS_ACCOUNT || '5'); // per account in window
 const MAX_FAILS_IP = parseInt(process.env.BF_MAX_FAILS_IP || '20');          // per IP in window
 const BASE_COOLDOWN_MS = parseInt(process.env.BF_BASE_COOLDOWN_MS || '5000'); // 5s
-const MAX_COOLDOWN_MS = parseInt(process.env.BF_MAX_COOLDOWN_MS || `${5 * 60 * 1000}`); // 5 min
-const TEMP_LOCK_MS = parseInt(process.env.BF_TEMP_LOCK_MS || `${15 * 60 * 1000}`); // 15 min
+const MAX_COOLDOWN_MS = parseInt(process.env.BF_MAX_COOLDOWN_MS || `${1 * 60 * 1000}`); // 5 min
+const TEMP_LOCK_MS = parseInt(process.env.BF_TEMP_LOCK_MS || `${2 * 60 * 1000}`); // 15 min
 const PAIR_TIGHT_THRESHOLD = parseInt(process.env.BF_PAIR_THRESHOLD || '3'); // stricter per account+ip
 
 // In-memory state maps

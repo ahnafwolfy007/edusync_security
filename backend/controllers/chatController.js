@@ -1,4 +1,5 @@
 const dbConfig = require('../config/db');
+const InputSanitizer = require('../utils/inputSanitization');
 
 class ChatController {
   // Create or get existing chat between buyer and seller for an item
@@ -6,8 +7,36 @@ class ChatController {
     try {
       const userId = req.user.userId;
       const { itemId, otherUserId } = req.body; // optional itemId for contextual chat
+      
+      // Validate user ID
+      if (!InputSanitizer.validateObjectId(userId)) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Invalid user ID'
+        });
+      }
+      
       if (!otherUserId) {
-        return res.status(400).json({ success:false, message:'otherUserId required'});
+        return res.status(400).json({ 
+          success: false, 
+          message: 'otherUserId required'
+        });
+      }
+      
+      // Validate other user ID
+      if (!InputSanitizer.validateObjectId(otherUserId)) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Invalid other user ID'
+        });
+      }
+      
+      // Validate item ID if provided
+      if (itemId && !InputSanitizer.validateObjectId(itemId)) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Invalid item ID'
+        });
       }
       const db = dbConfig.getDB();
       let sellerId, buyerId;
@@ -92,9 +121,45 @@ class ChatController {
       const userId = req.user.userId;
       const { chatId } = req.params;
       const { content } = req.body;
-      if (!content || !chatId) {
-        return res.status(400).json({ success: false, message: 'chatId and content required' });
+      
+      // Validate inputs
+      if (!InputSanitizer.validateObjectId(chatId)) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Invalid chat ID' 
+        });
       }
+      
+      if (!InputSanitizer.validateObjectId(userId)) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Invalid user ID' 
+        });
+      }
+      
+      if (!content) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Message content required' 
+        });
+      }
+      
+      // Sanitize message content
+      const sanitizedContent = InputSanitizer.sanitizeHTML(content, 1000);
+      if (!sanitizedContent || sanitizedContent.length < 1) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Invalid message content' 
+        });
+      }
+      
+      if (sanitizedContent.length > 1000) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Message too long (max 1000 characters)' 
+        });
+      }
+      
       const db = dbConfig.getDB();
 
       // Ensure user belongs to chat
