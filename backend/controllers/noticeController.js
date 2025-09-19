@@ -9,9 +9,10 @@ const getAllNotices = async (req, res) => {
     const params=[]; const where=[];
     if (category) { params.push(category); where.push(`category = $${params.length}`); }
     if (pinned !== undefined) { params.push(pinned === 'true'); where.push(`is_pinned = $${params.length}`); }
-    let q='SELECT n.*, u.full_name AS posted_by_name FROM notices n JOIN users u ON n.posted_by = u.user_id';
+  let q='SELECT n.*, u.full_name AS posted_by_name FROM notices n LEFT JOIN users u ON n.posted_by = u.user_id';
     if (where.length) q += ' WHERE '+where.join(' AND ');
-    q += ' ORDER BY is_pinned DESC, created_at DESC LIMIT 200';
+  // Latest first by published_at (fallback to created_at)
+  q += ' ORDER BY published_at DESC NULLS LAST, created_at DESC LIMIT 200';
     const db = dbConfig.getDB();
     const { rows } = await db.query(q, params);
     res.json({ success: true, data: rows });
@@ -19,7 +20,18 @@ const getAllNotices = async (req, res) => {
 };
 
 const getNoticeById = async (req, res) => {
-  try { const db=dbConfig.getDB(); const { id }=req.params; const { rows }=await db.query('SELECT * FROM notices WHERE notice_id=$1',[id]); if(!rows[0]) return res.status(404).json({success:false,message:'Not found'}); res.json({success:true,data:rows[0]}); } catch(e){ res.status(500).json({success:false,message:'Server error'}); }
+  try {
+    const db = dbConfig.getDB();
+    const { id } = req.params;
+    let rows;
+    if (/^\d+$/.test(id)) {
+      ({ rows } = await db.query('SELECT * FROM notices WHERE notice_id=$1', [parseInt(id, 10)]));
+    } else {
+      ({ rows } = await db.query('SELECT * FROM notices WHERE slug=$1 OR external_id=$1', [id]));
+    }
+    if (!rows[0]) return res.status(404).json({ success:false, message:'Not found' });
+    res.json({ success:true, data: rows[0] });
+  } catch (e) { res.status(500).json({ success:false, message:'Server error' }); }
 };
 
 const createNotice = async (req, res) => {
@@ -43,7 +55,7 @@ const deleteNotice = async (req, res) => {
 };
 
 const getUserNotices = async (req, res) => {
-  try { const userId=req.user?.user_id; if(!userId) return res.status(401).json({success:false,message:'Unauthorized'}); const db=dbConfig.getDB(); const { rows }=await db.query('SELECT * FROM notices WHERE posted_by=$1 ORDER BY created_at DESC',[userId]); res.json({success:true,data:rows}); } catch(e){ res.status(500).json({success:false,message:'Server error'}); }
+  try { const userId=req.user?.user_id; if(!userId) return res.status(401).json({success:false,message:'Unauthorized'}); const db=dbConfig.getDB(); const { rows }=await db.query('SELECT * FROM notices WHERE posted_by=$1 ORDER BY published_at DESC NULLS LAST, created_at DESC',[userId]); res.json({success:true,data:rows}); } catch(e){ res.status(500).json({success:false,message:'Server error'}); }
 };
 
 const markNoticeAsRead = async (req, res) => {

@@ -87,12 +87,16 @@ const Navigation = () => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
           {/* Logo and Brand */}
-          <div className="flex items-center">
+          <div className="flex items-center" style={{ marginLeft: '-2.5rem' }}>
             <Link to="/dashboard" className="flex items-center space-x-2">
-              <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
-                <span className="text-white font-bold text-sm">E</span>
-              </div>
-              <span className="font-bold text-xl text-gray-900">EduSync</span>
+              <img
+                src="/edusync%20site%20images/logo%202%20for%20nav.png"
+                alt="Edusync"
+                className="w-36 h-34 object-contain select-none"
+                style={{ imageRendering: 'auto' }}
+              />
+              {/* Optional brand text if needed later */}
+              {/* <span className="font-bold text-xl text-gray-900">Edusync</span> */}
             </Link>
           </div>
 

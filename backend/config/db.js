@@ -429,7 +429,7 @@ class Database {
       await client.query(`
         CREATE TABLE IF NOT EXISTS notices (
           notice_id SERIAL PRIMARY KEY,
-          posted_by INT NOT NULL REFERENCES users(user_id),
+          posted_by INT REFERENCES users(user_id),
           title VARCHAR(150),
           content TEXT,
           category VARCHAR(100),
@@ -437,6 +437,16 @@ class Database {
           created_at TIMESTAMP DEFAULT NOW()
         )
       `);
+      // Ensure posted_by is nullable (legacy schemas may have NOT NULL)
+      try { await client.query(`ALTER TABLE notices ALTER COLUMN posted_by DROP NOT NULL`); } catch (e) { /* ignore */ }
+      // Additional fields for scraped notices and metadata
+      await client.query(`ALTER TABLE notices ADD COLUMN IF NOT EXISTS source_url TEXT`);
+      await client.query(`ALTER TABLE notices ADD COLUMN IF NOT EXISTS external_id TEXT`);
+      await client.query(`ALTER TABLE notices ADD COLUMN IF NOT EXISTS slug TEXT`);
+      await client.query(`ALTER TABLE notices ADD COLUMN IF NOT EXISTS excerpt TEXT`);
+      await client.query(`ALTER TABLE notices ADD COLUMN IF NOT EXISTS published_at TIMESTAMP`);
+      await client.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_notices_external ON notices(external_id)`);
+      await client.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_notices_slug ON notices(slug)`);
 
       // Create JOBS table (was referenced elsewhere but not yet created)
       await client.query(`

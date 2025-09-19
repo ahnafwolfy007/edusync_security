@@ -22,7 +22,8 @@ import {
   FiBell,
   FiClock,
   FiTrendingUp,
-  FiDollarSign
+  FiDollarSign,
+  FiRefreshCcw
 } from 'react-icons/fi';
 import api from '../api';
 import { useNotification } from '../context/NotificationContext';
@@ -544,6 +545,36 @@ const AdminPanel = () => {
         </div>
         <div className="p-6">
           <div className="space-y-6">
+            {/* Notices scraper control */}
+            <div className="border rounded-lg p-4">
+              <div className="flex items-start justify-between">
+                <div>
+                  <h4 className="text-md font-medium text-gray-900 mb-1">Notices Scraper</h4>
+                  <p className="text-sm text-gray-600">Fetch latest notices from the configured source and store them in the database.</p>
+                  <p className="text-xs text-gray-500 mt-1">Source URL: {import.meta.env.VITE_NOTICES_SOURCE_URL || 'backend .env NOTICES_SOURCE_URL'}</p>
+                </div>
+                <button
+                  className="btn btn-primary btn-sm"
+                  onClick={async () => {
+                    try {
+                      const { data } = await api.post('/notices/scrape');
+                      if (data?.success) {
+                        showNotification(`Synced ${data.count || 0} notices`, 'success');
+                      } else {
+                        showNotification(data?.message || 'Scrape failed', 'error');
+                      }
+                    } catch (e) {
+                      const msg = e?.response?.data?.message || e.message || 'Failed to trigger scraper';
+                      showNotification(msg, 'error');
+                    }
+                  }}
+                  title="Trigger an on-demand sync"
+                >
+                  <FiRefreshCcw className="w-4 h-4 mr-2" /> Sync Notices Now
+                </button>
+              </div>
+            </div>
+
             <div>
               <h4 className="text-md font-medium text-gray-900 mb-3">General Settings</h4>
               <div className="space-y-4">

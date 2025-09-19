@@ -9,6 +9,7 @@ import ErrorBoundary from './components/common/ErrorBoundary';
 
 // Import layout components
 import Navigation from './components/layout/Navigation';
+import ThemedShell from './components/layout/ThemedShell';
 
 // Import page components
 import Login from './pages/Login';
@@ -16,6 +17,7 @@ import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
 import LostFound from './pages/LostFound';
 import NoticesBoard from './pages/NoticesBoard';
+import NoticeDetails from './pages/NoticeDetails';
 import JobsBoard from './pages/JobsBoard';
 import Tutoring from './pages/Tutoring';
 import Chat from './pages/Chat';
@@ -28,6 +30,7 @@ import FreeMarketplace from './pages/FreeMarketplace';
 // Detail pages (to be created if not existing yet)
 import SecondhandItemDetails from './pages/SecondhandItemDetails';
 import FreeItemDetails from './pages/FreeItemDetails';
+import AuthToggle from './pages/AuthToggle';
 import FoodOrdering from './pages/FoodOrdering';
 import OrderHistory from './pages/OrderHistory';
 import Notifications from './pages/Notifications';
@@ -63,7 +66,9 @@ const ProtectedRoute = ({ children }) => {
   return (
     <>
       <Navigation />
-      {children}
+      <ThemedShell leftBanner={false}>
+        {children}
+      </ThemedShell>
     </>
   );
 };
@@ -92,7 +97,9 @@ const AdminRoute = ({ children }) => {
   return (
     <>
       <Navigation />
-      {children}
+      <ThemedShell leftBanner={false}>
+        {children}
+      </ThemedShell>
     </>
   );
 };
@@ -137,13 +144,13 @@ function App() {
                   {/* Public Routes */}
                   <Route path="/login" element={
                     <PublicRoute>
-                      <Login />
+                      <AuthToggle />
                     </PublicRoute>
                   } />
                   
                   <Route path="/register" element={
                     <PublicRoute>
-                      <Register />
+                      <AuthToggle />
                     </PublicRoute>
                   } />
                   
@@ -225,6 +232,11 @@ function App() {
                   <Route path="/notices" element={
                     <ProtectedRoute>
                       <NoticesBoard />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="/notices/:id" element={
+                    <ProtectedRoute>
+                      <NoticeDetails />
                     </ProtectedRoute>
                   } />
                   <Route path="/jobs" element={

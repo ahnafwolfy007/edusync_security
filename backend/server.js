@@ -36,6 +36,7 @@ const foodVendorRoutes = require('./routes/foodVendorRoutes');
 const foodOrderRoutes = require('./routes/foodOrderRoutes');
 const businessMarketplaceRoutes = require('./routes/businessMarketplaceRoutes');
 const chatRoutes = require('./routes/chatRoutes');
+const { startScheduler } = require('./services/noticeScraper');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -236,6 +237,17 @@ async function startServer() {
       if (process.env.NODE_ENV === 'development') {
         console.log('🔧 Development mode - Detailed logging enabled');
       }
+
+      // Start notice scraper scheduler
+      startScheduler(() => ({
+        url: process.env.NOTICES_SOURCE_URL,
+        listSelector: process.env.NOTICES_LIST_SELECTOR,
+        titleSelector: process.env.NOTICES_TITLE_SELECTOR,
+        linkSelector: process.env.NOTICES_LINK_SELECTOR,
+        contentSelector: process.env.NOTICES_CONTENT_SELECTOR,
+        dateSelector: process.env.NOTICES_DATE_SELECTOR,
+        maxPages: parseInt(process.env.NOTICES_MAX_PAGES || '1', 10)
+      }));
     });
   } catch (error) {
     console.error('❌ Failed to start server:', error);

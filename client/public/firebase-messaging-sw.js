@@ -24,7 +24,7 @@ onBackgroundMessage(messaging, (payload) => {
   const notificationTitle = payload.notification.title || 'EduSync Notification';
   const notificationOptions = {
     body: payload.notification.body || 'You have a new notification',
-    icon: '/favicon.ico',
+  icon: '/edusync%20site%20images/logo%201.png',
     badge: '/badge-icon.png'
   };
 
