@@ -27,6 +27,8 @@ import SecondhandMarket from './pages/SecondhandMarket';
 import Marketplace from './pages/Marketplace';
 import AccommodationMarket from './pages/AccommodationMarket';
 import FreeMarketplace from './pages/FreeMarketplace';
+import FoodMarketplace from './pages/FoodMarketplace';
+import Rental from './pages/Rental';
 // Detail pages (to be created if not existing yet)
 import SecondhandItemDetails from './pages/SecondhandItemDetails';
 import FreeItemDetails from './pages/FreeItemDetails';
@@ -216,6 +218,18 @@ function App() {
                   <Route path="/marketplace" element={
                     <ProtectedRoute>
                       <Marketplace />
+                    </ProtectedRoute>
+                  } />
+
+                  <Route path="/rentals" element={
+                    <ProtectedRoute>
+                      <Rental />
+                    </ProtectedRoute>
+                  } />
+
+                  <Route path="/food-marketplace" element={
+                    <ProtectedRoute>
+                      <FoodMarketplace />
                     </ProtectedRoute>
                   } />
                   
