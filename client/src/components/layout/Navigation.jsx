@@ -15,6 +15,7 @@ import {
   FiPlus,
   FiMessageSquare
 } from 'react-icons/fi';
+import { FiChevronDown } from 'react-icons/fi';
 import { useAuth } from '../../context/AuthContext';
 import { useWallet } from '../../context/WalletContext';
 import { useNotification } from '../../context/NotificationContext';
@@ -32,18 +33,27 @@ const Navigation = () => {
   const userMenuRef = useRef(null);
   const notificationsRef = useRef(null);
 
-  const navItems = [
+  // Base top-level direct links (dropdowns rendered separately)
+  const baseNavItems = [
     { path: '/dashboard', name: 'Dashboard', icon: FiHome },
-    { path: '/business-marketplace', name: 'Businesses', icon: FiShoppingBag },
-    { path: '/secondhand-market', name: 'Secondhand', icon: FiBookOpen },
+    { path: '/notices', name: 'Notices', icon: FiBookOpen },
     { path: '/chat', name: 'Chat', icon: FiMessageSquare },
-    { path: '/wallet', name: 'Wallet', icon: FiDollarSign }
   ];
 
   // Append Admin link dynamically for elevated roles
   const elevated = (user?.role_name || user?.role || '').toLowerCase();
   const showAdmin = elevated === 'admin' || elevated === 'moderator';
-  const fullNavItems = showAdmin ? [...navItems, { path: '/admin', name: 'Admin', icon: FiSettings }] : navItems;
+  const fullNavItems = showAdmin ? [...baseNavItems, { path: '/admin', name: 'Admin', icon: FiSettings }] : baseNavItems;
+
+  // Dropdown state/refs
+  const [showMarketplaceMenu, setShowMarketplaceMenu] = useState(false);
+  const [showServicesMenu, setShowServicesMenu] = useState(false);
+  const marketplaceRef = useRef(null);
+  const servicesRef = useRef(null);
+
+  // Mobile submenu state
+  const [mobileMarketOpen, setMobileMarketOpen] = useState(false);
+  const [mobileServicesOpen, setMobileServicesOpen] = useState(false);
 
   const userMenuItems = [
     { path: '/profile', name: 'Profile', icon: FiUser },
@@ -58,6 +68,12 @@ const Navigation = () => {
       }
       if (notificationsRef.current && !notificationsRef.current.contains(event.target)) {
         setShowNotifications(false);
+      }
+      if (marketplaceRef.current && !marketplaceRef.current.contains(event.target)) {
+        setShowMarketplaceMenu(false);
+      }
+      if (servicesRef.current && !servicesRef.current.contains(event.target)) {
+        setShowServicesMenu(false);
       }
     };
 
@@ -77,6 +93,8 @@ const Navigation = () => {
   const isActivePath = (path) => {
     return location.pathname === path || location.pathname.startsWith(path + '/');
   };
+
+  const isAnyActive = (paths) => paths.some((p) => isActivePath(p));
 
   if (!user) {
     return null; // Don't show navigation for unauthenticated users
@@ -102,20 +120,94 @@ const Navigation = () => {
 
           {/* Desktop Navigation */}
           <div className="hidden md:flex items-center space-x-1">
-            {fullNavItems.map((item) => (
-              <Link
-                key={item.path}
-                to={item.path}
+            {/* Direct links: Dashboard, Notices */}
+            {fullNavItems
+              .filter((i) => i.name === 'Dashboard' || i.name === 'Notices')
+              .map((item) => (
+                <Link
+                  key={item.path}
+                  to={item.path}
+                  className={`px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 flex items-center space-x-1 ${
+                    isActivePath(item.path)
+                      ? 'text-blue-600 bg-blue-50'
+                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                  }`}
+                >
+                  <item.icon className="w-4 h-4" />
+                  <span>{item.name}</span>
+                </Link>
+              ))}
+
+            {/* Marketplace dropdown */}
+            <div className="relative" ref={marketplaceRef}>
+              <button
+                onClick={() => setShowMarketplaceMenu((v) => !v)}
                 className={`px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 flex items-center space-x-1 ${
-                  isActivePath(item.path)
+                  isAnyActive(['/business-marketplace', '/food-marketplace', '/free-marketplace', '/secondhand-market'])
                     ? 'text-blue-600 bg-blue-50'
                     : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
                 }`}
               >
-                <item.icon className="w-4 h-4" />
-                <span>{item.name}</span>
-              </Link>
-            ))}
+                <FiShoppingBag className="w-4 h-4" />
+                <span>Marketplace</span>
+                <FiChevronDown className="w-4 h-4" />
+              </button>
+              {showMarketplaceMenu && (
+                <div className="absolute left-0 mt-2 w-56 bg-white rounded-lg shadow-lg border border-gray-200 z-50">
+                  <div className="py-2">
+                    <Link to="/business-marketplace" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" onClick={() => setShowMarketplaceMenu(false)}>Businesses</Link>
+                    <Link to="/food-marketplace" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" onClick={() => setShowMarketplaceMenu(false)}>Food</Link>
+                    <Link to="/free-marketplace" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" onClick={() => setShowMarketplaceMenu(false)}>Giveaway (FreeMarket)</Link>
+                    <Link to="/secondhand-market" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" onClick={() => setShowMarketplaceMenu(false)}>Pre-Owned (Secondhand)</Link>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Services dropdown */}
+            <div className="relative" ref={servicesRef}>
+              <button
+                onClick={() => setShowServicesMenu((v) => !v)}
+                className={`px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 flex items-center space-x-1 ${
+                  isAnyActive(['/accommodation-market', '/rentals', '/tutoring', '/jobs', '/lost-found'])
+                    ? 'text-blue-600 bg-blue-50'
+                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                }`}
+              >
+                <FiBookOpen className="w-4 h-4" />
+                <span>Services</span>
+                <FiChevronDown className="w-4 h-4" />
+              </button>
+              {showServicesMenu && (
+                <div className="absolute left-0 mt-2 w-56 bg-white rounded-lg shadow-lg border border-gray-200 z-50">
+                  <div className="py-2">
+                    <Link to="/accommodation-market" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" onClick={() => setShowServicesMenu(false)}>Accommodation</Link>
+                    <Link to="/rentals" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" onClick={() => setShowServicesMenu(false)}>Rental</Link>
+                    <Link to="/tutoring" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" onClick={() => setShowServicesMenu(false)}>Tutoring</Link>
+                    <Link to="/jobs" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" onClick={() => setShowServicesMenu(false)}>Job Board</Link>
+                    <Link to="/lost-found" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" onClick={() => setShowServicesMenu(false)}>Lost & Found</Link>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Direct link: Chat */}
+            {fullNavItems
+              .filter((i) => i.name === 'Chat' || i.name === 'Admin')
+              .map((item) => (
+                <Link
+                  key={item.path}
+                  to={item.path}
+                  className={`px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 flex items-center space-x-1 ${
+                    isActivePath(item.path)
+                      ? 'text-blue-600 bg-blue-50'
+                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                  }`}
+                >
+                  <item.icon className="w-4 h-4" />
+                  <span>{item.name}</span>
+                </Link>
+              ))}
           </div>
 
           {/* Search Bar */}
@@ -272,28 +364,83 @@ const Navigation = () => {
         {showMobileMenu && (
           <div className="md:hidden border-t border-gray-200 py-4">
             <div className="space-y-1">
-              {fullNavItems.map((item) => (
+              {/* Dashboard */}
+              <Link
+                to="/dashboard"
+                className={`flex items-center space-x-2 px-3 py-2 rounded-md text-base font-medium ${isActivePath('/dashboard') ? 'text-blue-600 bg-blue-50' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'}`}
+                onClick={() => setShowMobileMenu(false)}
+              >
+                <FiHome className="w-5 h-5" />
+                <span>Dashboard</span>
+              </Link>
+              {/* Notices */}
+              <Link
+                to="/notices"
+                className={`flex items-center space-x-2 px-3 py-2 rounded-md text-base font-medium ${isActivePath('/notices') ? 'text-blue-600 bg-blue-50' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'}`}
+                onClick={() => setShowMobileMenu(false)}
+              >
+                <FiBookOpen className="w-5 h-5" />
+                <span>Notices</span>
+              </Link>
+
+              {/* Marketplace expandable */}
+              <button
+                className="w-full flex items-center justify-between px-3 py-2 rounded-md text-base font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100"
+                onClick={() => setMobileMarketOpen((v) => !v)}
+              >
+                <span className="flex items-center space-x-2"><FiShoppingBag className="w-5 h-5" /><span>Marketplace</span></span>
+                <FiChevronDown className={`w-4 h-4 transform transition-transform ${mobileMarketOpen ? 'rotate-180' : ''}`} />
+              </button>
+              {mobileMarketOpen && (
+                <div className="ml-6 space-y-1">
+                  <Link to="/business-marketplace" className="block px-3 py-2 rounded-md text-base text-gray-600 hover:bg-gray-100" onClick={() => setShowMobileMenu(false)}>Businesses</Link>
+                  <Link to="/food-marketplace" className="block px-3 py-2 rounded-md text-base text-gray-600 hover:bg-gray-100" onClick={() => setShowMobileMenu(false)}>Food</Link>
+                  <Link to="/free-marketplace" className="block px-3 py-2 rounded-md text-base text-gray-600 hover:bg-gray-100" onClick={() => setShowMobileMenu(false)}>Giveaway (FreeMarket)</Link>
+                  <Link to="/secondhand-market" className="block px-3 py-2 rounded-md text-base text-gray-600 hover:bg-gray-100" onClick={() => setShowMobileMenu(false)}>Pre-Owned (Secondhand)</Link>
+                </div>
+              )}
+
+              {/* Services expandable */}
+              <button
+                className="w-full flex items-center justify-between px-3 py-2 rounded-md text-base font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100"
+                onClick={() => setMobileServicesOpen((v) => !v)}
+              >
+                <span className="flex items-center space-x-2"><FiBookOpen className="w-5 h-5" /><span>Services</span></span>
+                <FiChevronDown className={`w-4 h-4 transform transition-transform ${mobileServicesOpen ? 'rotate-180' : ''}`} />
+              </button>
+              {mobileServicesOpen && (
+                <div className="ml-6 space-y-1">
+                  <Link to="/accommodation-market" className="block px-3 py-2 rounded-md text-base text-gray-600 hover:bg-gray-100" onClick={() => setShowMobileMenu(false)}>Accommodation</Link>
+                  <Link to="/rentals" className="block px-3 py-2 rounded-md text-base text-gray-600 hover:bg-gray-100" onClick={() => setShowMobileMenu(false)}>Rental</Link>
+                  <Link to="/tutoring" className="block px-3 py-2 rounded-md text-base text-gray-600 hover:bg-gray-100" onClick={() => setShowMobileMenu(false)}>Tutoring</Link>
+                  <Link to="/jobs" className="block px-3 py-2 rounded-md text-base text-gray-600 hover:bg-gray-100" onClick={() => setShowMobileMenu(false)}>Job Board</Link>
+                  <Link to="/lost-found" className="block px-3 py-2 rounded-md text-base text-gray-600 hover:bg-gray-100" onClick={() => setShowMobileMenu(false)}>Lost & Found</Link>
+                </div>
+              )}
+
+              {/* Chat */}
+              <Link
+                to="/chat"
+                className={`flex items-center space-x-2 px-3 py-2 rounded-md text-base font-medium ${isActivePath('/chat') ? 'text-blue-600 bg-blue-50' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'}`}
+                onClick={() => setShowMobileMenu(false)}
+              >
+                <FiMessageSquare className="w-5 h-5" />
+                <span>Chat</span>
+              </Link>
+
+              {/* Admin (if applicable) */}
+              {showAdmin && (
                 <Link
-                  key={item.path}
-                  to={item.path}
-                  className={`flex items-center space-x-2 px-3 py-2 rounded-md text-base font-medium ${
-                    isActivePath(item.path)
-                      ? 'text-blue-600 bg-blue-50'
-                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-                  }`}
+                  to="/admin"
+                  className={`flex items-center space-x-2 px-3 py-2 rounded-md text-base font-medium ${isActivePath('/admin') ? 'text-blue-600 bg-blue-50' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'}`}
                   onClick={() => setShowMobileMenu(false)}
                 >
-                  <item.icon className="w-5 h-5" />
-                  <span>{item.name}</span>
+                  <FiSettings className="w-5 h-5" />
+                  <span>Admin</span>
                 </Link>
-              ))}
-              <button
-                onClick={() => {
-                  navigate('/sell-item');
-                  setShowMobileMenu(false);
-                }}
-                className="flex items-center space-x-2 px-3 py-2 rounded-md text-base font-medium text-blue-600 hover:bg-blue-50 w-full text-left"
-              >
+              )}
+              {/* existing Sell Item button retained below if needed */}
+              <button onClick={() => { navigate('/sell-item'); setShowMobileMenu(false); }} className="flex items-center space-x-2 px-3 py-2 rounded-md text-base font-medium text-blue-600 hover:bg-blue-50 w-full text-left">
                 <FiPlus className="w-5 h-5" />
                 <span>Sell Item</span>
               </button>
