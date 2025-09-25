@@ -26,7 +26,7 @@ import BusinessShopDetails from './pages/BusinessShopDetails';
 import SecondhandMarket from './pages/SecondhandMarket';
 import Marketplace from './pages/Marketplace';
 import AccommodationMarket from './pages/AccommodationMarket';
-import FreeMarketplace from './pages/FreeMarketplace';
+import Giveaway from './pages/Giveaway';
 import FoodMarketplace from './pages/FoodMarketplace';
 import Rental from './pages/Rental';
 // Detail pages (to be created if not existing yet)
@@ -271,7 +271,7 @@ function App() {
                   
                   <Route path="/free-marketplace" element={
                     <ProtectedRoute>
-                      <FreeMarketplace />
+                      <Giveaway />
                     </ProtectedRoute>
                   } />
                   <Route path="/free-marketplace/:itemId" element={
