@@ -1,10 +1,19 @@
 const express = require('express');
 const router = express.Router();
+
 const walletController = require('../controllers/walletController');
 const { authenticateToken } = require('../middlewares/auth');
 
-// All routes require authentication
-router.use(authenticateToken);
+// NEW: session + concurrency middlewares
+const sessionTokenManager = require('../middlewares/sessionTokenManager');
+const concurrencyGuard = require('../middlewares/concurrencyGuard');
+
+// All wallet routes require auth, then session manager, then concurrency guard
+router.use(
+  authenticateToken,
+  sessionTokenManager.ensure,
+  concurrencyGuard.guard
+);
 
 // Get wallet information
 router.get('/', walletController.getWallet);

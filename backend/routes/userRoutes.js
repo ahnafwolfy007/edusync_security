@@ -1,11 +1,20 @@
 const express = require('express');
 const router = express.Router();
+
 const userController = require('../controllers/userController');
 const { authMiddleware } = require('../middlewares/authMiddleware');
 const { uploadMiddleware } = require('../middlewares/uploadMiddleware');
 
-// Apply auth middleware to all routes
-router.use(authMiddleware);
+// NEW: session + concurrency middlewares
+const sessionTokenManager = require('../middlewares/sessionTokenManager');
+const concurrencyGuard = require('../middlewares/concurrencyGuard');
+
+// Apply auth, then session manager, then concurrency guard to all user routes
+router.use(
+  authMiddleware,
+  sessionTokenManager.ensure,
+  concurrencyGuard.guard
+);
 
 // User profile routes
 router.get('/profile', userController.getProfile);
