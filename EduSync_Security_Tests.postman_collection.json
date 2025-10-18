@@ -1,0 +1,189 @@
+{
+  "info": {
+    "_postman_id": "edusync-security-tests-2025",
+    "name": "EduSync Security Tests",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "chatgpt"
+  },
+  "item": [
+    {
+      "name": "Session Token Manager",
+      "item": [
+        {
+          "name": "1️⃣ Login (create session)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "http://localhost:5000/api/auth/login",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "5000",
+              "path": ["api", "auth", "login"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"your_test_user@bscse.uiu.ac.bd\",\n  \"password\": \"Password123!\"\n}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "2️⃣ Get Profile (Session Auth)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Session {{sessionToken}}" }
+            ],
+            "url": {
+              "raw": "http://localhost:5000/api/auth/profile",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "5000",
+              "path": ["api", "auth", "profile"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "3️⃣ Logout (revoke session)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Session {{sessionToken}}" }
+            ],
+            "url": {
+              "raw": "http://localhost:5000/api/auth/logout",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "5000",
+              "path": ["api", "auth", "logout"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "4️⃣ Invalid Session Test",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Session invalid_token_example" }
+            ],
+            "url": {
+              "raw": "http://localhost:5000/api/auth/profile",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "5000",
+              "path": ["api", "auth", "profile"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Concurrency Guard",
+      "item": [
+        {
+          "name": "1️⃣ Payment Process - Idempotency",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Session {{sessionToken}}" },
+              { "key": "Idempotency-Key", "value": "test-key-1" }
+            ],
+            "url": {
+              "raw": "http://localhost:5000/api/payments/process",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "5000",
+              "path": ["api", "payments", "process"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount\": 500,\n  \"method\": \"wallet\",\n  \"description\": \"Test idempotency payment\"\n}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "2️⃣ Payment Process - Concurrency Limit",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Session {{sessionToken}}" },
+              { "key": "Idempotency-Key", "value": "test-concurrent-{{timestamp}}" }
+            ],
+            "url": {
+              "raw": "http://localhost:5000/api/payments/process",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "5000",
+              "path": ["api", "payments", "process"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount\": 700,\n  \"method\": \"wallet\",\n  \"description\": \"Concurrent limit test\"\n}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "3️⃣ Wallet Mutex (Critical Section)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Session {{sessionToken}}" },
+              { "key": "Idempotency-Key", "value": "mutex-{{timestamp}}" }
+            ],
+            "url": {
+              "raw": "http://localhost:5000/api/payments/refund",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "5000",
+              "path": ["api", "payments", "refund"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"paymentId\": 1234,\n  \"reason\": \"Simulated refund test\"\n}"
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "4️⃣ Payment Process - JWT Auth",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Idempotency-Key", "value": "jwt-test-{{timestamp}}" }
+            ],
+            "url": {
+              "raw": "http://localhost:5000/api/payments/process",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "5000",
+              "path": ["api", "payments", "process"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount\": 999,\n  \"method\": \"wallet\",\n  \"description\": \"JWT auth test\"\n}"
+            }
+          },
+          "response": []
+        }
+      ]
+    }
+  ],
+  "variable": [
+    { "key": "sessionToken", "value": "paste_your_session_token_here" },
+    { "key": "accessToken", "value": "paste_your_jwt_here" },
+    { "key": "timestamp", "value": "{{$timestamp}}" }
+  ]
+}
