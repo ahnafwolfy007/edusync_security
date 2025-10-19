@@ -50,6 +50,11 @@ const AdminPanel = () => {
   const [lastUpdate, setLastUpdate] = useState(null);
   const [pendingApprovals, setPendingApprovals] = useState([]);
   const [users, setUsers] = useState([]);
+  const [userLoading, setUserLoading] = useState(false);
+  const [userPage, setUserPage] = useState(1);
+  const [userPerPage, setUserPerPage] = useState(10);
+  const [userTotalPages, setUserTotalPages] = useState(1);
+  const [userTotalCount, setUserTotalCount] = useState(0);
   const [reports, setReports] = useState([]);
   
   // Enhanced user management states
@@ -57,7 +62,7 @@ const AdminPanel = () => {
   const [selectedUser, setSelectedUser] = useState(null);
   const [userAnalytics, setUserAnalytics] = useState({});
   const [searchTerm, setSearchTerm] = useState('');
-  const [roleFilter, setRoleFilter] = useState('');
+  const [roleFilter, setRoleFilter] = useState('all');
   const [sortBy, setSortBy] = useState('created_at');
   const [sortOrder, setSortOrder] = useState('desc');
 
@@ -81,7 +86,7 @@ const AdminPanel = () => {
         { key: 'stats', fn: () => api.get('/admin/dashboard/stats') },
         { key: 'businessApps', fn: () => api.get('/admin/business-applications/pending') },
         { key: 'foodVendors', fn: () => api.get('/admin/food-vendors/pending') },
-        { key: 'users', fn: () => api.get('/admin/users') }
+        // Users fetched via fetchUsersData with pagination
       ];
 
       const settled = await Promise.allSettled(requests.map(r => r.fn()));
@@ -121,28 +126,7 @@ const AdminPanel = () => {
       }));
       setPendingApprovals([...businessApprovals, ...vendorApprovals]);
 
-      // Users
-      if (responseMap.users?.data?.success) {
-        const rawUsers = responseMap.users.data.data?.users || [];
-        const processedUsers = rawUsers.map(u => ({
-          id: u.user_id,
-          full_name: u.full_name,
-          email: u.email,
-          phone: u.phone,
-          institution: u.institution,
-          location: u.location,
-          role: u.role_name,
-          // prefer explicit is_active field, fallback to true if missing
-          is_active: typeof u.is_active === 'boolean' ? u.is_active : (u.active === false ? false : true),
-          created_at: u.created_at,
-          login_count: u.login_count || 0,
-          last_login: u.last_login,
-          total_purchases: u.total_purchases || 0,
-          total_sales: u.total_sales || 0
-        }));
-        setUsers(processedUsers);
-        calculateUserAnalytics(processedUsers);
-      }
+      // Users will be loaded separately below
       setReports([]);
 
       // If every request failed, throw to show notification
@@ -156,6 +140,65 @@ const AdminPanel = () => {
       setLoading(false);
     }
   };
+
+  // Fetch users with pagination and filters
+  const fetchUsersData = async (page = 1) => {
+    try {
+      setUserLoading(true);
+      const params = {
+        page,
+        limit: userPerPage,
+        ...(roleFilter && roleFilter !== 'all' ? { role: roleFilter } : {}),
+        ...(searchTerm ? { search: searchTerm } : {})
+      };
+      const { data } = await api.get('/admin/users', { params });
+      if (data?.success) {
+        const rawUsers = data.data?.users || [];
+        const processed = rawUsers.map(u => ({
+          id: u.user_id,
+          full_name: u.full_name,
+          email: u.email,
+          phone: u.phone,
+          institution: u.institution,
+          location: u.location,
+          role: u.role_name,
+          is_active: typeof u.is_active === 'boolean' ? u.is_active : true,
+          is_blocked: typeof u.is_blocked === 'boolean' ? u.is_blocked : false,
+          created_at: u.created_at,
+          login_count: u.login_count || 0,
+          last_login: u.last_login,
+          total_purchases: u.total_purchases || 0,
+          total_sales: u.total_sales || 0
+        }));
+        setUsers(processed);
+        calculateUserAnalytics(processed);
+        const p = data.data?.pagination || {};
+        setUserPage(p.current_page || page);
+        setUserPerPage(p.per_page || userPerPage);
+        setUserTotalPages(p.total_pages || 1);
+        setUserTotalCount(p.total_users || processed.length);
+      }
+    } catch (e) {
+      console.error('Fetch users failed', e);
+    } finally {
+      setUserLoading(false);
+    }
+  };
+
+  // Initial load users after dashboard basics
+  useEffect(() => {
+    if (user && (normalizedRole === 'admin' || normalizedRole === 'moderator')) {
+      fetchUsersData(1);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]);
+
+  // Refetch on filter changes with small debounce
+  useEffect(() => {
+    const t = setTimeout(() => fetchUsersData(1), 300);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchTerm, roleFilter, userPerPage]);
 
   const calculateUserAnalytics = (usersData) => {
     const analytics = {
@@ -207,12 +250,17 @@ const AdminPanel = () => {
 
   const handleUserAction = async (userId, action) => {
     try {
-      const response = await api.put(`/admin/users/${userId}`, {
-        is_active: action === 'activate'
-      });
+      let payload = {};
+      if (action === 'activate' || action === 'suspend') {
+        payload.is_active = action === 'activate';
+      }
+      if (action === 'block' || action === 'unblock') {
+        payload.is_blocked = action === 'block';
+      }
+      const response = await api.put(`/admin/users/${userId}`, payload);
       if (response.data.success) {
         showNotification(`User ${action}d successfully`, 'success');
-        fetchDashboardData(); // Refresh the data
+        await fetchUsersData(userPage); // Refresh current users page
       }
     } catch (error) {
       console.error(`Error ${action}ing user:`, error);
@@ -584,18 +632,6 @@ const AdminPanel = () => {
   };
 
   const UsersTab = () => {
-    // Use component-level state for filtering
-    
-    const [localSearchTerm, setLocalSearchTerm] = useState('');
-    const [selectedRole, setSelectedRole] = useState('all');
-
-    const filteredUsers = users.filter(user => {
-      const matchesSearch = user.full_name?.toLowerCase().includes(localSearchTerm.toLowerCase()) ||
-                           user.email?.toLowerCase().includes(localSearchTerm.toLowerCase());
-      const matchesRole = selectedRole === 'all' || user.role === selectedRole;
-      return matchesSearch && matchesRole;
-    });
-
     return (
       <div className="space-y-6">
         {/* User Analytics Cards */}
@@ -718,14 +754,14 @@ const AdminPanel = () => {
                 <input
                   type="text"
                   placeholder="Search users..."
-                  value={localSearchTerm}
-                  onChange={(e) => setLocalSearchTerm(e.target.value)}
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
                   className="form-input w-full pl-10"
                 />
               </div>
               <select
-                value={selectedRole}
-                onChange={(e) => setSelectedRole(e.target.value)}
+                value={roleFilter}
+                onChange={(e) => setRoleFilter(e.target.value)}
                 className="form-input"
               >
                 <option value="all">All Roles</option>
@@ -734,6 +770,14 @@ const AdminPanel = () => {
                 <option value="food_vendor">Food Vendor</option>
                 <option value="moderator">Moderator</option>
                 <option value="admin">Admin</option>
+              </select>
+              <select
+                value={userPerPage}
+                onChange={(e) => { const v = parseInt(e.target.value, 10) || 10; setUserPerPage(v); setUserPage(1); }}
+                className="form-input"
+                title="Rows per page"
+              >
+                {[10,20,50].map(n => <option key={n} value={n}>{n}/page</option>)}
               </select>
             </div>
 
@@ -752,6 +796,9 @@ const AdminPanel = () => {
                       Status
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Blocked
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Joined
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -760,7 +807,7 @@ const AdminPanel = () => {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {filteredUsers.slice(0, 10).map((user) => (
+                  {(userLoading ? [] : users).map((user) => (
                     <tr key={user.id}>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center">
@@ -789,6 +836,15 @@ const AdminPanel = () => {
                           {user.is_active ? 'Active' : 'Inactive'}
                         </span>
                       </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                          user.is_blocked 
+                            ? 'bg-red-100 text-red-800' 
+                            : 'bg-gray-100 text-gray-800'
+                        }`}>
+                          {user.is_blocked ? 'Blocked' : '—'}
+                        </span>
+                      </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                         {new Date(user.created_at).toLocaleDateString()}
                       </td>
@@ -801,20 +857,31 @@ const AdminPanel = () => {
                           >
                             <FiEye className="w-4 h-4" />
                           </button>
-                          <button
-                            onClick={() => navigate(`/admin/users/${user.id}/edit`)}
-                            className="text-yellow-600 hover:text-yellow-900"
-                            title="Edit User"
-                          >
-                            <FiEdit className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => handleUserAction(user.id, user.is_active ? 'suspend' : 'activate')}
-                            className={user.is_active ? 'text-red-600 hover:text-red-900' : 'text-green-600 hover:text-green-900'}
-                            title={user.is_active ? 'Suspend User' : 'Activate User'}
-                          >
-                            {user.is_active ? <FiX className="w-4 h-4" /> : <FiCheck className="w-4 h-4" />}
-                          </button>
+                          {normalizedRole === 'admin' && (
+                            <>
+                              <button
+                                onClick={() => navigate(`/admin/users/${user.id}/edit`)}
+                                className="text-yellow-600 hover:text-yellow-900"
+                                title="Edit User"
+                              >
+                                <FiEdit className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={() => handleUserAction(user.id, user.is_active ? 'suspend' : 'activate')}
+                                className={user.is_active ? 'text-red-600 hover:text-red-900' : 'text-green-600 hover:text-green-900'}
+                                title={user.is_active ? 'Suspend User' : 'Activate User'}
+                              >
+                                {user.is_active ? <FiX className="w-4 h-4" /> : <FiCheck className="w-4 h-4" />}
+                              </button>
+                              <button
+                                onClick={() => handleUserAction(user.id, user.is_blocked ? 'unblock' : 'block')}
+                                className={user.is_blocked ? 'text-green-600 hover:text-green-900' : 'text-red-600 hover:text-red-900'}
+                                title={user.is_blocked ? 'Unblock User' : 'Block User'}
+                              >
+                                {user.is_blocked ? <FiCheck className="w-4 h-4" /> : <FiTrash2 className="w-4 h-4" />}
+                              </button>
+                            </>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -824,24 +891,29 @@ const AdminPanel = () => {
             </div>
 
             {/* Pagination */}
-            {filteredUsers.length > 10 && (
-              <div className="px-6 py-3 border-t border-gray-200">
-                <div className="flex items-center justify-between">
-                  <div className="text-sm text-gray-700">
-                    Showing <strong>1</strong> to <strong>{Math.min(10, filteredUsers.length)}</strong> of{' '}
-                    <strong>{filteredUsers.length}</strong> users
-                  </div>
-                  <div className="flex space-x-2">
-                    <button className="px-3 py-1 text-sm bg-gray-100 text-gray-600 rounded hover:bg-gray-200">
-                      Previous
-                    </button>
-                    <button className="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700">
-                      Next
-                    </button>
-                  </div>
+            <div className="px-6 py-3 border-t border-gray-200">
+              <div className="flex items-center justify-between">
+                <div className="text-sm text-gray-700">
+                  Page <strong>{userPage}</strong> of <strong>{userTotalPages}</strong> • Total users: <strong>{userTotalCount}</strong>
+                </div>
+                <div className="flex space-x-2">
+                  <button
+                    onClick={() => userPage > 1 && fetchUsersData(userPage - 1)}
+                    disabled={userPage <= 1 || userLoading}
+                    className={`px-3 py-1 text-sm rounded ${userPage <= 1 || userLoading ? 'bg-gray-100 text-gray-400' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                  >
+                    Previous
+                  </button>
+                  <button
+                    onClick={() => userPage < userTotalPages && fetchUsersData(userPage + 1)}
+                    disabled={userPage >= userTotalPages || userLoading}
+                    className={`px-3 py-1 text-sm rounded ${userPage >= userTotalPages || userLoading ? 'bg-gray-100 text-gray-400' : 'bg-blue-600 text-white hover:bg-blue-700'}`}
+                  >
+                    Next
+                  </button>
                 </div>
               </div>
-            )}
+            </div>
           </div>
         </div>
 
@@ -1072,7 +1144,7 @@ const AdminPanel = () => {
           <>
             {activeTab === 'dashboard' && <DashboardTab />}
             {activeTab === 'approvals' && <ApprovalsTab />}
-            {activeTab === 'users' && normalizedRole === 'admin' && <UsersTab />}
+            {activeTab === 'users' && (normalizedRole === 'admin' || normalizedRole === 'moderator') && <UsersTab />}
             {activeTab === 'reports' && normalizedRole === 'admin' && <ReportsTab />}
             {activeTab === 'settings' && normalizedRole === 'admin' && <SettingsTab />}
           </>

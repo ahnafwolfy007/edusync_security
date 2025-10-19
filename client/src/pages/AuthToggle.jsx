@@ -9,7 +9,7 @@ import { useNotification } from '../context/NotificationContext';
 export default function AuthToggle() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { login, register } = useAuth();
+  const { login, register, verifyAdminOtp } = useAuth();
   const { showError, showSuccess } = useNotification();
 
   const API_ROOT = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
@@ -31,6 +31,14 @@ export default function AuthToggle() {
   // Login state
   const [loginData, setLoginData] = useState({ email: '', password: '' });
   const [loadingLogin, setLoadingLogin] = useState(false);
+  // Admin login OTP state
+  const [adminOtpRequired, setAdminOtpRequired] = useState(false);
+  const [adminTempToken, setAdminTempToken] = useState('');
+  const [adminOtpDigits, setAdminOtpDigits] = useState(['', '', '', '', '', '']);
+  const adminOtpRefs = useRef([]);
+  const [adminVerifyingOtp, setAdminVerifyingOtp] = useState(false);
+  const [adminOtpError, setAdminOtpError] = useState('');
+  const [adminOtpInfo, setAdminOtpInfo] = useState('');
 
   // Register state (multi-step with OTP)
   const [step, setStep] = useState(1); // 1: basic, 2: otp+role+location, 3: password
@@ -62,7 +70,15 @@ export default function AuthToggle() {
     setLoadingLogin(true);
     try {
       const result = await login(loginData.email, loginData.password, false);
-      if (result?.success !== false) {
+      // Handle admin OTP-required flow
+      if (result?.requiresOtp && result?.tempToken) {
+        setAdminTempToken(result.tempToken);
+        setAdminOtpRequired(true);
+        setAdminOtpDigits(['', '', '', '', '', '']);
+        setAdminOtpError('');
+        setAdminOtpInfo(result?.message || 'We sent a 6-digit code to your email. Enter it below to continue.');
+        // Do not navigate yet; wait for OTP verification
+      } else if (result?.success) {
         showSuccess('Welcome back!');
         navigate('/dashboard');
       } else {
@@ -71,6 +87,43 @@ export default function AuthToggle() {
     } catch (err) {
       showError(err.response?.data?.message || err.message || 'Login failed');
     } finally { setLoadingLogin(false); }
+  };
+
+  // Admin OTP change/verify handlers
+  const handleAdminOtpChange = (idx, v) => {
+    if (!/^[0-9]?$/.test(v)) return;
+    const next = [...adminOtpDigits];
+    next[idx] = v;
+    setAdminOtpDigits(next);
+    if (v && idx < 5) adminOtpRefs.current[idx + 1]?.focus();
+  };
+
+  const handleVerifyAdminOtp = async () => {
+    const code = adminOtpDigits.join('');
+    if (code.length !== 6) { setAdminOtpError('Enter the 6-digit code'); return; }
+    setAdminOtpError('');
+    try {
+      setAdminVerifyingOtp(true);
+      const res = await verifyAdminOtp(adminTempToken, code);
+      if (res?.success) {
+        showSuccess('Logged in successfully');
+        navigate('/dashboard');
+      } else {
+        setAdminOtpError(res?.message || 'Invalid or expired code');
+      }
+    } catch (e) {
+      setAdminOtpError(e?.response?.data?.message || e?.message || 'OTP verification failed');
+    } finally {
+      setAdminVerifyingOtp(false);
+    }
+  };
+
+  const cancelAdminOtp = () => {
+    setAdminOtpRequired(false);
+    setAdminTempToken('');
+    setAdminOtpDigits(['', '', '', '', '', '']);
+    setAdminOtpError('');
+    setAdminOtpInfo('');
   };
 
   // Registration validations per step
@@ -193,37 +246,67 @@ export default function AuthToggle() {
           {/* Forms */}
           <div className="p-6 md:p-8">
             {isLogin ? (
-              <form onSubmit={submitLogin} className="space-y-5">
-                <div>
-                  <label className="block text-gray-700 text-sm font-medium mb-2">Email Address</label>
-                  <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                      <FiMail className="h-5 w-5 text-gray-400" />
+              adminOtpRequired ? (
+                <div className="space-y-5">
+                  <div>
+                    <label className="block text-gray-700 text-sm font-medium mb-2">Enter Admin Login OTP <span className="ml-2 text-indigo-600 text-xs font-semibold inline-flex items-center"><FiShield className="w-4 h-4 mr-1"/>2FA</span></label>
+                    {adminOtpInfo && <p className="text-xs text-gray-600 mb-2">{adminOtpInfo}</p>}
+                    <div className="flex items-center">
+                      {[0,1,2,3,4,5].map(i => (
+                        <input
+                          key={i}
+                          ref={el => adminOtpRefs.current[i] = el}
+                          maxLength={1}
+                          inputMode="numeric"
+                          value={adminOtpDigits[i]}
+                          onChange={(e)=>handleAdminOtpChange(i, e.target.value.replace(/[^0-9]/g,''))}
+                          className="w-10 h-12 text-center border rounded mx-1"
+                        />
+                      ))}
+                      <button type="button" onClick={handleVerifyAdminOtp} disabled={adminVerifyingOtp || adminOtpDigits.some(d=>!d)} className="ml-3 px-4 py-2 rounded-lg bg-indigo-600 text-white">
+                        {adminVerifyingOtp ? 'Verifying...' : 'Verify'}
+                      </button>
                     </div>
-                    <input name="email" type="email" value={loginData.email} onChange={(e)=>setLoginData({...loginData, email: e.target.value})} required className="w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="you@domain.com" />
+                    {adminOtpError && <p className="text-xs text-red-600 mt-2">{adminOtpError}</p>}
+                    <p className="text-xs text-gray-500 mt-2">Didn’t receive the code? Go back and login again to resend a new OTP.</p>
+                  </div>
+                  <div className="flex gap-3">
+                    <button type="button" onClick={cancelAdminOtp} className="flex-1 py-2 px-4 rounded-lg bg-gray-100 text-gray-700">Back to Login</button>
                   </div>
                 </div>
-                <div>
-                  <label className="block text-gray-700 text-sm font-medium mb-2">Password</label>
-                  <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                      <FiLock className="h-5 w-5 text-gray-400" />
+              ) : (
+                <form onSubmit={submitLogin} className="space-y-5">
+                  <div>
+                    <label className="block text-gray-700 text-sm font-medium mb-2">Email Address</label>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <FiMail className="h-5 w-5 text-gray-400" />
+                      </div>
+                      <input name="email" type="email" value={loginData.email} onChange={(e)=>setLoginData({...loginData, email: e.target.value})} required className="w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="you@domain.com" />
                     </div>
-                    <input name="password" type="password" value={loginData.password} onChange={(e)=>setLoginData({...loginData, password: e.target.value})} required className="w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="••••••••" />
                   </div>
-                </div>
-                <button type="submit" disabled={loadingLogin} className={`w-full py-2 px-4 rounded-lg text-white ${loadingLogin ? 'bg-gray-400' : 'bg-indigo-600 hover:bg-indigo-700'}`}>
-                  {loadingLogin ? 'Signing in...' : 'Login'}
-                </button>
-                <div className="relative my-4">
-                  <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-gray-300" /></div>
-                  <div className="relative flex justify-center"><span className="px-2 bg-white text-gray-500 text-sm">Or continue with</span></div>
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <button type="button" className="w-full inline-flex justify-center py-2 px-4 border border-gray-300 rounded-lg bg-white text-sm font-medium text-gray-700 hover:bg-gray-50"><FaGoogle className="h-5 w-5 text-red-500" /><span className="ml-2">Google</span></button>
-                  <button type="button" className="w-full inline-flex justify-center py-2 px-4 border border-gray-300 rounded-lg bg-white text-sm font-medium text-gray-700 hover:bg-gray-50"><FaMicrosoft className="h-5 w-5 text-blue-500" /><span className="ml-2">Microsoft</span></button>
-                </div>
-              </form>
+                  <div>
+                    <label className="block text-gray-700 text-sm font-medium mb-2">Password</label>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <FiLock className="h-5 w-5 text-gray-400" />
+                      </div>
+                      <input name="password" type="password" value={loginData.password} onChange={(e)=>setLoginData({...loginData, password: e.target.value})} required className="w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="••••••••" />
+                    </div>
+                  </div>
+                  <button type="submit" disabled={loadingLogin} className={`w-full py-2 px-4 rounded-lg text-white ${loadingLogin ? 'bg-gray-400' : 'bg-indigo-600 hover:bg-indigo-700'}`}>
+                    {loadingLogin ? 'Signing in...' : 'Login'}
+                  </button>
+                  <div className="relative my-4">
+                    <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-gray-300" /></div>
+                    <div className="relative flex justify-center"><span className="px-2 bg-white text-gray-500 text-sm">Or continue with</span></div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <button type="button" className="w-full inline-flex justify-center py-2 px-4 border border-gray-300 rounded-lg bg-white text-sm font-medium text-gray-700 hover:bg-gray-50"><FaGoogle className="h-5 w-5 text-red-500" /><span className="ml-2">Google</span></button>
+                    <button type="button" className="w-full inline-flex justify-center py-2 px-4 border border-gray-300 rounded-lg bg-white text-sm font-medium text-gray-700 hover:bg-gray-50"><FaMicrosoft className="h-5 w-5 text-blue-500" /><span className="ml-2">Microsoft</span></button>
+                  </div>
+                </form>
+              )
             ) : (
               <form onSubmit={submitRegister} className="space-y-5">
                 {step === 1 && (

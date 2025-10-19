@@ -360,6 +360,14 @@ class AuthController {
 
       const user = otpResult.rows[0];
 
+      // Blocked check
+      if (user.is_blocked === true) {
+        return res.status(403).json({ success: false, message: 'Your account is banned. Please contact support.' });
+      }
+      if (user.is_active === false) {
+        return res.status(403).json({ success: false, message: 'Your account is inactive. Please contact support.' });
+      }
+
       // Mark OTP as used
       await db.query(`
         UPDATE admin_login_otps SET used = TRUE WHERE otp_id = $1
@@ -470,7 +478,7 @@ class AuthController {
     // Extract user object (first row)
     const user = userResult.rows[0];
 
-    // Password verification (custom verifier supports legacy/new formats)
+  // Password verification (custom verifier supports legacy/new formats)
     // Keep timing and messaging generic to avoid oracle leaks
     let isPasswordValid = false;
     if (user.password_hash) {
@@ -493,6 +501,16 @@ class AuthController {
 
     // On success: reset counters for this account/IP (guard clears cooldown/lock state)
     recordBruteForceResult({ success: true }, bfCtx);
+
+    // Check if user is blocked/inactive
+    if (user.is_blocked === true) {
+      recordBruteForceResult({ success: false }, bfCtx);
+      return res.status(403).json({ success: false, message: 'Your account is banned. Please contact support.' });
+    }
+    if (user.is_active === false) {
+      recordBruteForceResult({ success: false }, bfCtx);
+      return res.status(403).json({ success: false, message: 'Your account is inactive. Please contact support.' });
+    }
 
     // Check if user is admin - require 2FA
     if (user.role_name === 'admin') {

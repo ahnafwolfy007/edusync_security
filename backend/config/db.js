@@ -120,6 +120,12 @@ class Database {
   // Ensure user activity tracking columns
   await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS login_count INTEGER DEFAULT 0`);
   await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login TIMESTAMP`);
+  // Ensure account status flags
+  await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE`);
+  await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS is_blocked BOOLEAN DEFAULT FALSE`);
+  // Backfill nulls for legacy rows
+  try { await client.query(`UPDATE users SET is_active = TRUE WHERE is_active IS NULL`); } catch(e) {}
+  try { await client.query(`UPDATE users SET is_blocked = FALSE WHERE is_blocked IS NULL`); } catch(e) {}
 
       // Create BUSINESS_APPLICATIONS table
       await client.query(`

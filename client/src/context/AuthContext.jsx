@@ -59,8 +59,11 @@ export const AuthProvider = ({ children }) => {
         return { success: false, message: msg };
       }
 
+      console.log('Login response data:', response.data); // Debug log
+
       // Check if admin requires OTP
       if (response.data.requiresOtp && response.data.tempToken) {
+        console.log('Returning OTP required response'); // Debug log
         return {
           success: true,
           requiresOtp: true,
@@ -108,6 +111,9 @@ export const AuthProvider = ({ children }) => {
       if (status === 401) {
         return { success: false, message: 'Invalid email or password' };
       }
+      if (status === 403) {
+        return { success: false, message: data?.message || 'Your account is not permitted to login.' };
+      }
 
       // Fallback for other errors
       const fallback = data?.message || 'Login failed. Please try again.';
@@ -154,6 +160,9 @@ export const AuthProvider = ({ children }) => {
       
       if (status === 400) {
         return { success: false, message: data?.message || 'Invalid or expired OTP' };
+      }
+      if (status === 403) {
+        return { success: false, message: data?.message || 'Your account is not permitted to login.' };
       }
       
       const fallback = data?.message || 'OTP verification failed. Please try again.';

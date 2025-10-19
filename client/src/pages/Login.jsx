@@ -173,90 +173,145 @@ const Login = () => {
           className="mt-8 sm:mx-auto sm:w-full sm:max-w-md"
         >
           <div className="bg-white/10 backdrop-blur-xl rounded-3xl shadow-2xl border border-white/20 p-8">
-{adminOtpRequired ? (
-              /* Admin OTP Verification Form */
+            
+            {/* Conditional Rendering: Show OTP form if admin requires 2FA, otherwise show login form */}
+            {adminOtpRequired === true ? (
+              
+              /* ========== ADMIN OTP VERIFICATION FORM ========== */
               <form onSubmit={handleAdminOtpSubmit} className="space-y-6">
-                <motion.div className="text-center">
-                  <FiShield className="mx-auto h-16 w-16 text-yellow-400 mb-4" />
-                  <h3 className="text-2xl font-bold text-white mb-2">Admin Security Verification 🔐</h3>
-                  <p className="text-purple-200 text-sm">
-                    An OTP has been sent to your admin email address. Please enter it below to complete login.
-                  </p>
-                </motion.div>
+                
+                {/* Header Section */}
+                <div className="text-center space-y-4">
+                  <div className="mx-auto w-20 h-20 bg-gradient-to-br from-yellow-400 to-orange-500 rounded-full flex items-center justify-center shadow-lg">
+                    <FiShield className="w-12 h-12 text-white" />
+                  </div>
+                  <div>
+                    <h3 className="text-3xl font-extrabold text-white mb-2">
+                      🔐 Admin Verification
+                    </h3>
+                    <p className="text-purple-200 text-base leading-relaxed px-4">
+                      We've sent a <span className="font-bold text-yellow-300">6-digit verification code</span> to your admin email.
+                      <br />
+                      Please check your inbox and enter the code below.
+                    </p>
+                  </div>
+                </div>
 
-                {/* OTP Input */}
-                <motion.div
-                  whileHover={{ scale: 1.02 }}
-                  className="group"
-                >
-                  <label htmlFor="adminOtp" className="block text-sm font-semibold text-white mb-2">
-                    🔢 6-Digit Verification Code
+                {/* OTP Input Section */}
+                <div className="space-y-4">
+                  <label htmlFor="adminOtp" className="block text-center text-lg font-bold text-white">
+                    Enter Verification Code
                   </label>
                   <div className="relative">
                     <input
                       id="adminOtp"
                       name="adminOtp"
                       type="text"
+                      inputMode="numeric"
                       maxLength="6"
                       pattern="[0-9]{6}"
+                      autoComplete="one-time-code"
                       required
                       value={adminOtp}
                       onChange={(e) => setAdminOtp(e.target.value.replace(/[^0-9]/g, ''))}
-                      className="w-full px-4 py-4 bg-white/10 border border-white/30 rounded-xl text-white text-center text-2xl font-mono tracking-wider placeholder-purple-200 focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-transparent transition-all duration-300 backdrop-blur-sm"
+                      onPaste={(e) => {
+                        const pastedData = e.clipboardData.getData('text').replace(/[^0-9]/g, '').slice(0, 6);
+                        setAdminOtp(pastedData);
+                        e.preventDefault();
+                      }}
+                      className="w-full px-8 py-6 bg-white/20 border-4 border-yellow-400/50 rounded-2xl text-white text-center text-4xl font-black tracking-[1em] placeholder-purple-300/50 focus:outline-none focus:ring-4 focus:ring-yellow-400 focus:border-yellow-300 transition-all duration-300 backdrop-blur-sm shadow-inner"
                       placeholder="000000"
+                      style={{ letterSpacing: '0.5em', paddingLeft: 'calc(0.5em + 2rem)' }}
+                      autoFocus
                     />
+                    {/* Character count indicator */}
+                    <div className="absolute right-4 top-1/2 transform -translate-y-1/2 bg-white/10 px-3 py-1 rounded-lg">
+                      <span className={`text-sm font-bold ${adminOtp.length === 6 ? 'text-green-400' : 'text-purple-300'}`}>
+                        {adminOtp.length}/6
+                      </span>
+                    </div>
                   </div>
-                  <p className="text-xs text-purple-200 mt-1">Enter the 6-digit code sent to your admin email</p>
-                </motion.div>
+                  <div className="flex items-center justify-center space-x-2 text-sm text-purple-200">
+                    <span>⏱️</span>
+                    <span>Code expires in 10 minutes</span>
+                  </div>
+                </div>
 
                 {/* Action Buttons */}
-                <div className="space-y-3">
+                <div className="space-y-3 pt-2">
+                  {/* Verify Button */}
                   <motion.button
-                    whileHover={{ scale: 1.05, boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.2)" }}
-                    whileTap={{ scale: 0.95 }}
+                    whileHover={{ scale: adminOtp.length === 6 && !verifyingAdminOtp ? 1.02 : 1 }}
+                    whileTap={{ scale: adminOtp.length === 6 && !verifyingAdminOtp ? 0.98 : 1 }}
                     type="submit"
                     disabled={verifyingAdminOtp || adminOtp.length !== 6}
-                    className="w-full bg-gradient-to-r from-yellow-500 to-orange-600 text-white font-bold py-4 px-6 rounded-xl shadow-lg hover:shadow-yellow-500/25 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed relative overflow-hidden group"
+                    className={`w-full py-5 px-6 rounded-xl font-bold text-lg shadow-2xl transition-all duration-300 ${
+                      verifyingAdminOtp || adminOtp.length !== 6
+                        ? 'bg-gray-500 text-gray-300 cursor-not-allowed opacity-60'
+                        : 'bg-gradient-to-r from-yellow-400 via-orange-500 to-red-500 text-white hover:shadow-yellow-500/50 hover:scale-105'
+                    }`}
                   >
-                    <div className="absolute inset-0 bg-gradient-to-r from-red-500 to-pink-500 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-                    <span className="relative z-10 flex items-center justify-center">
-                      {verifyingAdminOtp ? (
-                        <>
-                          <motion.div
-                            animate={{ rotate: 360 }}
-                            transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-                            className="mr-3"
-                          >
-                            🔄
-                          </motion.div>
-                          Verifying...
-                        </>
-                      ) : (
-                        <>
-                          <FiShield className="mr-2" />
-                          Verify & Enter Admin Panel 🚀
-                        </>
-                      )}
-                    </span>
+                    {verifyingAdminOtp ? (
+                      <span className="flex items-center justify-center space-x-3">
+                        <motion.div
+                          animate={{ rotate: 360 }}
+                          transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                          className="text-2xl"
+                        >
+                          ⏳
+                        </motion.div>
+                        <span>Verifying OTP...</span>
+                      </span>
+                    ) : (
+                      <span className="flex items-center justify-center space-x-2">
+                        <FiShield className="w-5 h-5" />
+                        <span>Verify & Access Admin Panel</span>
+                        <span>🚀</span>
+                      </span>
+                    )}
                   </motion.button>
 
+                  {/* Back to Login Button */}
                   <motion.button
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
+                    whileHover={{ scale: 1.01 }}
+                    whileTap={{ scale: 0.99 }}
                     type="button"
                     onClick={() => {
+                      console.log('Returning to login form');
                       setAdminOtpRequired(false);
                       setAdminTempToken('');
                       setAdminOtp('');
                     }}
-                    className="w-full bg-white/10 text-purple-200 font-semibold py-3 px-6 rounded-xl border border-white/30 hover:bg-white/20 transition-all duration-300"
+                    className="w-full py-3 px-6 rounded-xl font-semibold text-base bg-white/10 text-purple-200 border-2 border-white/30 hover:bg-white/20 hover:border-white/50 transition-all duration-300"
                   >
                     ← Back to Login
                   </motion.button>
                 </div>
+
+                {/* Resend OTP Section */}
+                <div className="pt-4 border-t border-white/20">
+                  <div className="text-center space-y-2">
+                    <p className="text-sm text-purple-200">
+                      Didn't receive the code?
+                    </p>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        handleSubmit(e);
+                      }}
+                      className="text-yellow-300 hover:text-yellow-200 font-bold text-sm underline decoration-2 underline-offset-4 transition-colors"
+                    >
+                      📧 Resend Verification Code
+                    </button>
+                  </div>
+                </div>
+                
               </form>
+              
             ) : (
-              /* Regular Login Form */
+              
+              /* ========== REGULAR LOGIN FORM ========== */
               <form onSubmit={handleSubmit} className="space-y-6">
                 {/* Email Field */}
                 <motion.div

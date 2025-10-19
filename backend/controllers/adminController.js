@@ -393,6 +393,8 @@ class AdminController {
           u.updated_at,
           u.is_email_verified,
           u.profile_picture,
+          u.is_active,
+          u.is_blocked,
           r.role_name,
           COALESCE(u.login_count, 0) as login_count,
           u.last_login,
@@ -694,7 +696,39 @@ class AdminController {
 
   // Placeholder methods for compatibility
   async updateUser(req, res) {
-    res.status(501).json({ success: false, message: 'Not implemented yet' });
+    try {
+      const { id } = req.params;
+      const { is_active, is_blocked, role } = req.body;
+      const db = dbConfig.db;
+
+      const fields = [];
+      const values = [];
+      let idx = 1;
+
+      if (typeof is_active === 'boolean') { fields.push(`is_active = $${idx++}`); values.push(is_active); }
+      if (typeof is_blocked === 'boolean') { fields.push(`is_blocked = $${idx++}`); values.push(is_blocked); }
+      if (role) {
+        // Update role via name -> role_id
+        const rr = await db.query('SELECT role_id FROM roles WHERE role_name = $1', [role]);
+        if (rr.rows.length) { fields.push(`role_id = $${idx++}`); values.push(rr.rows[0].role_id); }
+      }
+
+      if (fields.length === 0) {
+        return res.status(400).json({ success: false, message: 'No valid fields to update' });
+      }
+
+      const q = `UPDATE users SET ${fields.join(', ')}, updated_at = NOW() WHERE user_id = $${idx} RETURNING *`;
+      values.push(parseInt(id, 10));
+      const result = await db.query(q, values);
+      if (result.rows.length === 0) {
+        return res.status(404).json({ success: false, message: 'User not found' });
+      }
+
+      return res.json({ success: true, message: 'User updated successfully', data: result.rows[0] });
+    } catch (e) {
+      console.error('Update user error:', e);
+      return res.status(500).json({ success: false, message: 'Failed to update user' });
+    }
   }
 
   async deleteUser(req, res) {
