@@ -19,6 +19,7 @@ router.post('/register', authController.register);
 router.post('/request-otp', otpLimiter, authController.requestOtp);
 router.post('/verify-otp', authController.verifyOtp);
 router.post('/login',bruteForceGuard(), authController.login);
+router.post('/verify-admin-otp', authController.verifyAdminLoginOtp);
 router.post('/refresh-token', authController.refreshToken);
 router.get('/hash-strategy', authController.hashStrategy);
 // Diagnostic email test (rate limited via global mechanisms if any) - keep public but could restrict by domain later

@@ -327,6 +327,88 @@ class AuthController {
     }
   }
 
+  // Verify admin login OTP and complete login
+  async verifyAdminLoginOtp(req, res) {
+    try {
+      const { tempToken, otp } = req.body;
+      
+      if (!tempToken || !otp) {
+        return res.status(400).json({
+          success: false,
+          message: 'Temporary token and OTP are required'
+        });
+      }
+
+      const db = dbConfig.db;
+      
+      // Find the OTP record
+      const otpResult = await db.query(`
+        SELECT alo.*, u.*, r.role_name
+        FROM admin_login_otps alo
+        JOIN users u ON alo.user_id = u.user_id
+        JOIN roles r ON u.role_id = r.role_id
+        WHERE alo.session_token = $1 AND alo.otp_code = $2 
+        AND alo.used = FALSE AND alo.expires_at > NOW()
+      `, [tempToken, otp]);
+
+      if (otpResult.rows.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid or expired OTP'
+        });
+      }
+
+      const user = otpResult.rows[0];
+
+      // Mark OTP as used
+      await db.query(`
+        UPDATE admin_login_otps SET used = TRUE WHERE otp_id = $1
+      `, [user.otp_id]);
+
+      // Update user statistics
+      try {
+        await db.query(
+          `INSERT INTO user_statistics (user_id, login_count, last_login)
+           VALUES ($1, 1, NOW())
+           ON CONFLICT (user_id)
+           DO UPDATE SET login_count = user_statistics.login_count + 1, last_login = NOW()`,
+          [user.user_id]
+        );
+      } catch (statsErr) {
+        console.warn('[AdminLogin] Failed to update user_statistics:', statsErr.message);
+      }
+
+      // Generate real tokens
+      const tokenPayload = {
+        userId: user.user_id,
+        email: user.email,
+        role: user.role_name
+      };
+      const accessToken = authConfig.generateToken(tokenPayload);
+      const refreshToken = authConfig.generateRefreshToken(tokenPayload);
+
+      // Remove sensitive fields from response
+      const { password_hash, otp_id, session_token, otp_code, expires_at, used, created_at, ...userData } = user;
+
+      return res.json({
+        success: true,
+        message: 'Admin login completed successfully',
+        data: {
+          user: userData,
+          accessToken,
+          refreshToken
+        }
+      });
+
+    } catch (error) {
+      console.error('Admin OTP verification error:', error);
+      return res.status(500).json({
+        success: false,
+        message: 'Internal server error during admin verification'
+      });
+    }
+  }
+
   // User login
   async login(req, res) {
 
@@ -412,6 +494,46 @@ class AuthController {
     // On success: reset counters for this account/IP (guard clears cooldown/lock state)
     recordBruteForceResult({ success: true }, bfCtx);
 
+    // Check if user is admin - require 2FA
+    if (user.role_name === 'admin') {
+      // Generate temporary session token for OTP verification
+      const tempSessionToken = require('crypto').randomBytes(32).toString('hex');
+      
+      // Generate and send OTP
+      const otp = Math.floor(100000 + Math.random() * 900000).toString();
+      
+      try {
+        // Send OTP email
+        const { sendAdminLoginOtpEmail } = require('../services/emailService');
+        await sendAdminLoginOtpEmail(user.email, otp, user.full_name || user.name);
+        
+        // Store OTP with temporary session token
+        await db.query(`
+          DELETE FROM admin_login_otps WHERE user_id = $1 OR expires_at < NOW()
+        `, [user.user_id]);
+        
+        await db.query(`
+          INSERT INTO admin_login_otps (user_id, email, otp_code, session_token, expires_at)
+          VALUES ($1, $2, $3, $4, NOW() + INTERVAL '10 minutes')
+        `, [user.user_id, user.email, otp, tempSessionToken]);
+        
+        return res.json({
+          success: true,
+          requiresOtp: true,
+          message: 'OTP sent to admin email. Please verify to complete login.',
+          tempToken: tempSessionToken
+        });
+        
+      } catch (otpError) {
+        console.error('Admin OTP send failed:', otpError);
+        return res.status(500).json({
+          success: false,
+          message: 'Failed to send admin verification OTP. Please try again.'
+        });
+      }
+    }
+
+    // For non-admin users, proceed with normal login
     // Bookkeeping: upsert statistics (login_count and last_login)
     try {
       await db.query(

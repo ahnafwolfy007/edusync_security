@@ -122,6 +122,31 @@ async function sendOtpEmail(to, otp) {
   return coreSend(mailOptions);
 }
 
+async function sendAdminLoginOtpEmail(to, otp, adminName) {
+  const mailOptions = {
+    from: process.env.MAIL_FROM || process.env.EMAIL_FROM || process.env.SMTP_USER || process.env.EMAIL_USER || 'no-reply@edusync.local',
+    to,
+    subject: '🔐 EduSync Admin Login Verification',
+    text: `Hello ${adminName || 'Admin'},\n\nYour admin login verification code is: ${otp}\n\nThis code expires in 10 minutes.\n\nIf you did not attempt to log in, please contact the system administrator immediately.\n\nBest regards,\nEduSync Security Team`,
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2 style="color: #1f2937;">🔐 Admin Login Verification</h2>
+        <p>Hello <strong>${adminName || 'Admin'}</strong>,</p>
+        <p>Your admin login verification code is:</p>
+        <div style="background: #f3f4f6; padding: 20px; text-align: center; border-radius: 8px; margin: 20px 0;">
+          <span style="font-size: 32px; font-weight: bold; color: #1f2937; letter-spacing: 5px;">${otp}</span>
+        </div>
+        <p><strong>⏰ This code expires in 10 minutes.</strong></p>
+        <div style="background: #fee2e2; border-left: 4px solid #dc2626; padding: 12px; margin: 20px 0;">
+          <p style="margin: 0; color: #dc2626;"><strong>Security Notice:</strong> If you did not attempt to log in, please contact the system administrator immediately.</p>
+        </div>
+        <p>Best regards,<br><strong>EduSync Security Team</strong></p>
+      </div>
+    `
+  };
+  return coreSend(mailOptions);
+}
+
 async function sendGenericEmail(to, subject, text, html) {
   const mailOptions = {
     from: process.env.MAIL_FROM || process.env.EMAIL_FROM || process.env.SMTP_USER || process.env.EMAIL_USER || 'no-reply@edusync.local',
@@ -133,4 +158,4 @@ async function sendGenericEmail(to, subject, text, html) {
   return coreSend(mailOptions);
 }
 
-module.exports = { sendOtpEmail, sendGenericEmail };
+module.exports = { sendOtpEmail, sendGenericEmail, sendAdminLoginOtpEmail };
