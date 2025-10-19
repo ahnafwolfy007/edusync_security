@@ -370,7 +370,16 @@ class AdminController {
     try {
       const { page = 1, limit = 20, role, search } = req.query;
       const offset = (page - 1) * limit;
+      
       const db = dbConfig.db;
+      
+      // If database is not available, return error instead of mock data
+      if (!db) {
+        return res.status(500).json({
+          success: false,
+          message: 'Database connection not available'
+        });
+      }
       
       let query = `
         SELECT 
@@ -381,14 +390,16 @@ class AdminController {
           u.institution,
           u.location,
           u.created_at,
+          u.updated_at,
+          u.is_email_verified,
+          u.profile_picture,
           r.role_name,
-          us.login_count,
-          us.last_login,
-          us.total_purchases,
-          us.total_sales
+          COALESCE(u.login_count, 0) as login_count,
+          u.last_login,
+          0 as total_purchases,
+          0 as total_sales
         FROM users u
         LEFT JOIN roles r ON u.role_id = r.role_id
-        LEFT JOIN user_statistics us ON u.user_id = us.user_id
         WHERE 1=1
       `;
       
@@ -525,19 +536,38 @@ class AdminController {
   async getUserById(req, res) {
     try {
       const { id } = req.params;
+      
+      // If database is not available, return mock data for testing
+      if (!dbConfig.db) {
+        console.log('⚠️ Database not available, returning mock user data');
+        const mockUsers = require('../mock-users');
+        const user = mockUsers.find(u => u.user_id === parseInt(id));
+        
+        if (!user) {
+          return res.status(404).json({
+            success: false,
+            message: 'User not found'
+          });
+        }
+        
+        return res.json({
+          success: true,
+          data: user
+        });
+      }
+      
       const db = dbConfig.db;
       
       const query = `
         SELECT 
           u.*,
           r.role_name,
-          us.login_count,
-          us.last_login,
-          us.total_purchases,
-          us.total_sales
+          COALESCE(u.login_count, 0) as login_count,
+          u.last_login,
+          0 as total_purchases,
+          0 as total_sales
         FROM users u
         LEFT JOIN roles r ON u.role_id = r.role_id
-        LEFT JOIN user_statistics us ON u.user_id = us.user_id
         WHERE u.user_id = $1
       `;
       

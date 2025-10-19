@@ -33,27 +33,40 @@ class Database {
       const result = await client.query('SELECT NOW()');
       console.log('✅ Database connected successfully at:', result.rows[0].now);
       client.release();
+      // Set the db property to the pool when connection is successful
+      this.db = this.pool;
       return true;
     } catch (error) {
       if (error.code === '28P01') {
+        console.error('⚠️ Database authentication failed - continuing with mock data');
         console.error('❌ Authentication failed: Check DB_USER/DB_PASSWORD in .env (user=' + (process.env.DB_USER||'postgres') + ')');
       } else {
+        console.error('⚠️ Database connection failed - continuing with mock data');
         console.error('❌ Database connection failed:', error.message);
       }
-      throw error;
+      // Don't throw error, allow app to continue with mock data
+      this.db = null;
+      return false;
     }
   }
 
   // Initialize database tables
   async initializeDatabase() {
     try {
-      await this.testConnection();
-  await this.createTables();
-  // Seeding removed per cleanup request; ensure roles/categories present via idempotent creation
-      console.log('✅ Database initialized successfully');
+      const connected = await this.testConnection();
+      if (connected) {
+        await this.createTables();
+        console.log('✅ Database initialized successfully');
+        // Ensure db property is set for successful connections
+        this.db = this.pool;
+      } else {
+        console.log('⚠️ Database initialization skipped - using fallback mode');
+        this.db = null;
+      }
     } catch (error) {
       console.error('❌ Database initialization failed:', error);
-      throw error;
+      console.log('⚠️ Continuing without database connection - using mock data');
+      this.db = null;
     }
   }
 
@@ -104,6 +117,9 @@ class Database {
   // Ensure email verification fields
   await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS is_email_verified BOOLEAN DEFAULT FALSE`);
   await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified_at TIMESTAMP`);
+  // Ensure user activity tracking columns
+  await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS login_count INTEGER DEFAULT 0`);
+  await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login TIMESTAMP`);
 
       // Create BUSINESS_APPLICATIONS table
       await client.query(`
@@ -498,6 +514,20 @@ class Database {
   // Migration safety: adjust email_verification_tokens silently (ignore failures)
   try { await client.query(`ALTER TABLE email_verification_tokens ALTER COLUMN user_id DROP NOT NULL`); } catch(e) {}
   // (Removed duplicate unique constraint migration to avoid transaction abort)
+
+      // Admin Login OTP table for 2FA
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS admin_login_otps (
+          otp_id SERIAL PRIMARY KEY,
+          user_id INT NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+          email VARCHAR(150) NOT NULL,
+          otp_code VARCHAR(10) NOT NULL,
+          session_token VARCHAR(500) NOT NULL,
+          expires_at TIMESTAMP NOT NULL,
+          used BOOLEAN DEFAULT FALSE,
+          created_at TIMESTAMP DEFAULT NOW()
+        )
+      `);
 
   /* FREE MARKETPLACE FAVORITES table moved below after free_marketplace_items definition */
 

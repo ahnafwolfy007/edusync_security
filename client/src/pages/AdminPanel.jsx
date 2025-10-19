@@ -22,7 +22,16 @@ import {
   FiBell,
   FiClock,
   FiTrendingUp,
-  FiDollarSign
+  FiDollarSign,
+  FiMapPin,
+  FiBook,
+  FiLogIn,
+  FiUserCheck,
+  FiBriefcase,
+  FiTrendingDown,
+  FiCalendar,
+  FiActivity,
+  FiStar
 } from 'react-icons/fi';
 import api from '../api';
 import { useNotification } from '../context/NotificationContext';
@@ -41,6 +50,15 @@ const AdminPanel = () => {
   const [pendingApprovals, setPendingApprovals] = useState([]);
   const [users, setUsers] = useState([]);
   const [reports, setReports] = useState([]);
+  
+  // Enhanced user management states
+  const [userModalOpen, setUserModalOpen] = useState(false);
+  const [selectedUser, setSelectedUser] = useState(null);
+  const [userAnalytics, setUserAnalytics] = useState({});
+  const [searchTerm, setSearchTerm] = useState('');
+  const [roleFilter, setRoleFilter] = useState('');
+  const [sortBy, setSortBy] = useState('created_at');
+  const [sortOrder, setSortOrder] = useState('desc');
 
   // Allow admin or moderator (moderator has limited powers)
   useEffect(() => {
@@ -105,14 +123,23 @@ const AdminPanel = () => {
       // Users
       if (responseMap.users?.data?.success) {
         const rawUsers = responseMap.users.data.data?.users || [];
-        setUsers(rawUsers.map(u => ({
+        const processedUsers = rawUsers.map(u => ({
           id: u.user_id,
           full_name: u.full_name,
           email: u.email,
+          phone: u.phone,
+          institution: u.institution,
+          location: u.location,
           role: u.role_name,
           is_active: true,
-          created_at: u.created_at
-        })));
+          created_at: u.created_at,
+          login_count: u.login_count || 0,
+          last_login: u.last_login,
+          total_purchases: u.total_purchases || 0,
+          total_sales: u.total_sales || 0
+        }));
+        setUsers(processedUsers);
+        calculateUserAnalytics(processedUsers);
       }
       setReports([]);
 
@@ -125,6 +152,69 @@ const AdminPanel = () => {
       showNotification(error?.message || 'Error loading admin data', 'error');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const calculateUserAnalytics = (usersData) => {
+    const analytics = {
+      totalUsers: usersData.length,
+      activeUsers: usersData.filter(u => u.is_active).length,
+      inactiveUsers: usersData.filter(u => !u.is_active).length,
+      roleDistribution: {},
+      recentSignups: usersData.filter(u => {
+        const signupDate = new Date(u.created_at);
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+        return signupDate > thirtyDaysAgo;
+      }).length,
+      institutionDistribution: {},
+      totalLogins: usersData.reduce((sum, u) => sum + (u.login_count || 0), 0),
+      totalPurchases: usersData.reduce((sum, u) => sum + (u.total_purchases || 0), 0),
+      totalSales: usersData.reduce((sum, u) => sum + (u.total_sales || 0), 0)
+    };
+
+    // Calculate role distribution
+    usersData.forEach(user => {
+      const role = user.role || 'user';
+      analytics.roleDistribution[role] = (analytics.roleDistribution[role] || 0) + 1;
+    });
+
+    // Calculate institution distribution
+    usersData.forEach(user => {
+      if (user.institution) {
+        analytics.institutionDistribution[user.institution] = 
+          (analytics.institutionDistribution[user.institution] || 0) + 1;
+      }
+    });
+
+    setUserAnalytics(analytics);
+  };
+
+  const handleViewUser = async (userId) => {
+    try {
+      const response = await api.get(`/admin/users/${userId}`);
+      if (response.data.success) {
+        setSelectedUser(response.data.data);
+        setUserModalOpen(true);
+      }
+    } catch (error) {
+      console.error('Error fetching user details:', error);
+      showNotification('Failed to load user details', 'error');
+    }
+  };
+
+  const handleUserAction = async (userId, action) => {
+    try {
+      const response = await api.put(`/admin/users/${userId}`, {
+        is_active: action === 'activate'
+      });
+      if (response.data.success) {
+        showNotification(`User ${action}d successfully`, 'success');
+        fetchDashboardData(); // Refresh the data
+      }
+    } catch (error) {
+      console.error(`Error ${action}ing user:`, error);
+      showNotification(`Failed to ${action} user`, 'error');
     }
   };
 
@@ -175,11 +265,6 @@ const AdminPanel = () => {
       console.error('Error handling approval:', error);
       showNotification(`Error ${action}ing ${type.replace('_',' ')}`, 'error');
     }
-  };
-
-  const handleUserAction = async (userId, action, data = {}) => {
-    // Not implemented on backend yet
-    showNotification('User management actions are not implemented yet', 'warning');
   };
 
   const tabs = [
@@ -344,19 +429,274 @@ const AdminPanel = () => {
     </div>
   );
 
+  // User Details Modal Component
+  const UserModal = ({ user, isOpen, onClose }) => {
+    if (!isOpen || !user) return null;
+
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+          <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+            <h3 className="text-lg font-medium text-gray-900">User Details</h3>
+            <button
+              onClick={onClose}
+              className="text-gray-400 hover:text-gray-600"
+            >
+              <FiX className="w-6 h-6" />
+            </button>
+          </div>
+          
+          <div className="p-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Basic Information */}
+              <div className="space-y-4">
+                <h4 className="text-lg font-medium text-gray-900 mb-4">Basic Information</h4>
+                
+                <div className="flex items-center space-x-4">
+                  <div className="w-16 h-16 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white font-medium text-xl">
+                    {user.full_name?.charAt(0) || user.email?.charAt(0)}
+                  </div>
+                  <div>
+                    <h5 className="text-xl font-semibold text-gray-900">{user.full_name || 'No Name'}</h5>
+                    <p className="text-gray-600">{user.email}</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Phone</label>
+                    <div className="flex items-center mt-1">
+                      <FiPhone className="w-4 h-4 text-gray-400 mr-2" />
+                      <span className="text-sm text-gray-900">{user.phone || 'Not provided'}</span>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Role</label>
+                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 mt-1">
+                      {user.role_name || user.role || 'User'}
+                    </span>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Institution</label>
+                    <div className="flex items-center mt-1">
+                      <FiBook className="w-4 h-4 text-gray-400 mr-2" />
+                      <span className="text-sm text-gray-900">{user.institution || 'Not provided'}</span>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Location</label>
+                    <div className="flex items-center mt-1">
+                      <FiMapPin className="w-4 h-4 text-gray-400 mr-2" />
+                      <span className="text-sm text-gray-900">{user.location || 'Not provided'}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Member Since</label>
+                  <div className="flex items-center mt-1">
+                    <FiCalendar className="w-4 h-4 text-gray-400 mr-2" />
+                    <span className="text-sm text-gray-900">
+                      {new Date(user.created_at).toLocaleDateString('en-US', {
+                        year: 'numeric',
+                        month: 'long',
+                        day: 'numeric'
+                      })}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Activity & Statistics */}
+              <div className="space-y-4">
+                <h4 className="text-lg font-medium text-gray-900 mb-4">Activity & Statistics</h4>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="bg-blue-50 p-4 rounded-lg">
+                    <div className="flex items-center">
+                      <FiLogIn className="w-8 h-8 text-blue-600 mr-3" />
+                      <div>
+                        <p className="text-sm font-medium text-gray-600">Total Logins</p>
+                        <p className="text-2xl font-bold text-blue-600">{user.login_count || 0}</p>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="bg-green-50 p-4 rounded-lg">
+                    <div className="flex items-center">
+                      <FiTrendingUp className="w-8 h-8 text-green-600 mr-3" />
+                      <div>
+                        <p className="text-sm font-medium text-gray-600">Total Purchases</p>
+                        <p className="text-2xl font-bold text-green-600">{user.total_purchases || 0}</p>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="bg-purple-50 p-4 rounded-lg">
+                    <div className="flex items-center">
+                      <FiDollarSign className="w-8 h-8 text-purple-600 mr-3" />
+                      <div>
+                        <p className="text-sm font-medium text-gray-600">Total Sales</p>
+                        <p className="text-2xl font-bold text-purple-600">{user.total_sales || 0}</p>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="bg-orange-50 p-4 rounded-lg">
+                    <div className="flex items-center">
+                      <FiActivity className="w-8 h-8 text-orange-600 mr-3" />
+                      <div>
+                        <p className="text-sm font-medium text-gray-600">Last Login</p>
+                        <p className="text-sm font-bold text-orange-600">
+                          {user.last_login ? new Date(user.last_login).toLocaleDateString() : 'Never'}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-gray-50 p-4 rounded-lg">
+                  <h5 className="font-medium text-gray-900 mb-2">Account Status</h5>
+                  <div className="flex items-center space-x-4">
+                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                      user.is_active 
+                        ? 'bg-green-100 text-green-800' 
+                        : 'bg-red-100 text-red-800'
+                    }`}>
+                      {user.is_active ? 'Active' : 'Inactive'}
+                    </span>
+                    {user.email_verified && (
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                        <FiUserCheck className="w-3 h-3 mr-1" />
+                        Email Verified
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   const UsersTab = () => {
-    const [searchTerm, setSearchTerm] = useState('');
-    const [selectedRole, setSelectedRole] = useState('all');
+    // Use component-level state for filtering
     
+    const [localSearchTerm, setLocalSearchTerm] = useState('');
+    const [selectedRole, setSelectedRole] = useState('all');
+
     const filteredUsers = users.filter(user => {
-      const matchesSearch = user.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                           user.email?.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesSearch = user.full_name?.toLowerCase().includes(localSearchTerm.toLowerCase()) ||
+                           user.email?.toLowerCase().includes(localSearchTerm.toLowerCase());
       const matchesRole = selectedRole === 'all' || user.role === selectedRole;
       return matchesSearch && matchesRole;
     });
 
     return (
       <div className="space-y-6">
+        {/* User Analytics Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="bg-white rounded-lg shadow p-6">
+            <div className="flex items-center">
+              <div className="flex-shrink-0">
+                <FiUsers className="h-8 w-8 text-blue-600" />
+              </div>
+              <div className="ml-4">
+                <p className="text-sm font-medium text-gray-600">Total Users</p>
+                <p className="text-2xl font-bold text-gray-900">{userAnalytics.totalUsers || 0}</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-lg shadow p-6">
+            <div className="flex items-center">
+              <div className="flex-shrink-0">
+                <FiUserCheck className="h-8 w-8 text-green-600" />
+              </div>
+              <div className="ml-4">
+                <p className="text-sm font-medium text-gray-600">Active Users</p>
+                <p className="text-2xl font-bold text-gray-900">{userAnalytics.activeUsers || 0}</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-lg shadow p-6">
+            <div className="flex items-center">
+              <div className="flex-shrink-0">
+                <FiCalendar className="h-8 w-8 text-purple-600" />
+              </div>
+              <div className="ml-4">
+                <p className="text-sm font-medium text-gray-600">New This Month</p>
+                <p className="text-2xl font-bold text-gray-900">{userAnalytics.recentSignups || 0}</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-lg shadow p-6">
+            <div className="flex items-center">
+              <div className="flex-shrink-0">
+                <FiActivity className="h-8 w-8 text-orange-600" />
+              </div>
+              <div className="ml-4">
+                <p className="text-sm font-medium text-gray-600">Total Logins</p>
+                <p className="text-2xl font-bold text-gray-900">{userAnalytics.totalLogins || 0}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Role Distribution Analytics */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="bg-white rounded-lg shadow p-6">
+            <h3 className="text-lg font-medium text-gray-900 mb-4">Role Distribution</h3>
+            <div className="space-y-3">
+              {Object.entries(userAnalytics.roleDistribution || {}).map(([role, count]) => (
+                <div key={role} className="flex items-center justify-between">
+                  <span className="text-sm font-medium text-gray-600 capitalize">
+                    {role.replace('_', ' ')}
+                  </span>
+                  <div className="flex items-center space-x-2">
+                    <div className="w-20 bg-gray-200 rounded-full h-2">
+                      <div 
+                        className="bg-blue-600 h-2 rounded-full" 
+                        style={{ width: `${(count / userAnalytics.totalUsers) * 100}%` }}
+                      ></div>
+                    </div>
+                    <span className="text-sm font-bold text-gray-900">{count}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="bg-white rounded-lg shadow p-6">
+            <h3 className="text-lg font-medium text-gray-900 mb-4">Top Institutions</h3>
+            <div className="space-y-3">
+              {Object.entries(userAnalytics.institutionDistribution || {})
+                .sort(([,a], [,b]) => b - a)
+                .slice(0, 5)
+                .map(([institution, count]) => (
+                <div key={institution} className="flex items-center justify-between">
+                  <span className="text-sm font-medium text-gray-600 truncate">
+                    {institution}
+                  </span>
+                  <div className="flex items-center space-x-2">
+                    <div className="w-16 bg-gray-200 rounded-full h-2">
+                      <div 
+                        className="bg-green-600 h-2 rounded-full" 
+                        style={{ width: `${(count / userAnalytics.totalUsers) * 100}%` }}
+                      ></div>
+                    </div>
+                    <span className="text-sm font-bold text-gray-900">{count}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
         <div className="bg-white rounded-lg shadow">
           <div className="px-6 py-4 border-b border-gray-200">
             <div className="flex items-center justify-between">
@@ -376,8 +716,8 @@ const AdminPanel = () => {
                 <input
                   type="text"
                   placeholder="Search users..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
+                  value={localSearchTerm}
+                  onChange={(e) => setLocalSearchTerm(e.target.value)}
                   className="form-input w-full pl-10"
                 />
               </div>
@@ -453,20 +793,23 @@ const AdminPanel = () => {
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                         <div className="flex space-x-2">
                           <button
-                            onClick={() => navigate(`/admin/users/${user.id}`)}
+                            onClick={() => handleViewUser(user.id)}
                             className="text-blue-600 hover:text-blue-900"
+                            title="View Details"
                           >
                             <FiEye className="w-4 h-4" />
                           </button>
                           <button
                             onClick={() => navigate(`/admin/users/${user.id}/edit`)}
                             className="text-yellow-600 hover:text-yellow-900"
+                            title="Edit User"
                           >
                             <FiEdit className="w-4 h-4" />
                           </button>
                           <button
                             onClick={() => handleUserAction(user.id, user.is_active ? 'suspend' : 'activate')}
                             className={user.is_active ? 'text-red-600 hover:text-red-900' : 'text-green-600 hover:text-green-900'}
+                            title={user.is_active ? 'Suspend User' : 'Activate User'}
                           >
                             {user.is_active ? <FiX className="w-4 h-4" /> : <FiCheck className="w-4 h-4" />}
                           </button>
@@ -477,8 +820,38 @@ const AdminPanel = () => {
                 </tbody>
               </table>
             </div>
+
+            {/* Pagination */}
+            {filteredUsers.length > 10 && (
+              <div className="px-6 py-3 border-t border-gray-200">
+                <div className="flex items-center justify-between">
+                  <div className="text-sm text-gray-700">
+                    Showing <strong>1</strong> to <strong>{Math.min(10, filteredUsers.length)}</strong> of{' '}
+                    <strong>{filteredUsers.length}</strong> users
+                  </div>
+                  <div className="flex space-x-2">
+                    <button className="px-3 py-1 text-sm bg-gray-100 text-gray-600 rounded hover:bg-gray-200">
+                      Previous
+                    </button>
+                    <button className="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700">
+                      Next
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
+
+        {/* User Details Modal */}
+        <UserModal 
+          user={selectedUser} 
+          isOpen={userModalOpen} 
+          onClose={() => {
+            setUserModalOpen(false);
+            setSelectedUser(null);
+          }} 
+        />
       </div>
     );
   };

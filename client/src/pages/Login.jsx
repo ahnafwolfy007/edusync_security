@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { FiMail, FiLock, FiEye, FiEyeOff, FiUser, FiShield, FiStar, FiZap, FiTrendingUp } from 'react-icons/fi';
+import { FiMail, FiLock, FiEye, FiEyeOff, FiZap, FiShield, FiStar, FiTrendingUp } from 'react-icons/fi';
 import { motion } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
 import { useNotification } from '../context/NotificationContext';
@@ -9,7 +9,7 @@ import ForgotPasswordModal from '../components/ForgotPasswordModal';
 const Login = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { login } = useAuth();
+  const { login, verifyAdminOtp } = useAuth();
   const { showSuccess, showError } = useNotification();
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -19,6 +19,12 @@ const Login = () => {
     password: '',
     rememberMe: false
   });
+  
+  // Admin 2FA state
+  const [adminOtpRequired, setAdminOtpRequired] = useState(false);
+  const [adminTempToken, setAdminTempToken] = useState('');
+  const [adminOtp, setAdminOtp] = useState('');
+  const [verifyingAdminOtp, setVerifyingAdminOtp] = useState(false);
 
   const from = location.state?.from?.pathname || '/dashboard';
 
@@ -33,7 +39,12 @@ const Login = () => {
     setLoading(true);
     try {
       const result = await login(formData.email, formData.password, formData.rememberMe);
-      if (result?.success) {
+      if (result?.success && result?.requiresOtp) {
+        // Admin requires 2FA
+        setAdminOtpRequired(true);
+        setAdminTempToken(result.tempToken);
+        showSuccess(result.message);
+      } else if (result?.success) {
         showSuccess('Welcome back!');
         navigate(from, { replace: true });
       } else {
@@ -44,6 +55,31 @@ const Login = () => {
       showError(error.response?.data?.message || 'Login failed. Please try again.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleAdminOtpSubmit = async (e) => {
+    e.preventDefault();
+    
+    if (!adminOtp || adminOtp.length !== 6) {
+      showError('Please enter the 6-digit OTP code');
+      return;
+    }
+
+    setVerifyingAdminOtp(true);
+    try {
+      const result = await verifyAdminOtp(adminTempToken, adminOtp);
+      if (result?.success) {
+        showSuccess('Admin login successful!');
+        navigate(from, { replace: true });
+      } else {
+        showError(result?.message || 'Invalid OTP code');
+      }
+    } catch (error) {
+      console.error('Admin OTP verification error:', error);
+      showError(error.response?.data?.message || 'OTP verification failed. Please try again.');
+    } finally {
+      setVerifyingAdminOtp(false);
     }
   };
 
@@ -137,133 +173,218 @@ const Login = () => {
           className="mt-8 sm:mx-auto sm:w-full sm:max-w-md"
         >
           <div className="bg-white/10 backdrop-blur-xl rounded-3xl shadow-2xl border border-white/20 p-8">
-            <form onSubmit={handleSubmit} className="space-y-6">
-              {/* Email Field */}
-              <motion.div
-                whileHover={{ scale: 1.02 }}
-                className="group"
-              >
-                <label htmlFor="email" className="block text-sm font-semibold text-white mb-2">
-                  📧 Email Address
-                </label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                    <FiMail className="h-5 w-5 text-purple-300 group-hover:text-cyan-300 transition-colors" />
-                  </div>
-                  <input
-                    id="email"
-                    name="email"
-                    type="email"
-                    autoComplete="email"
-                    required
-                    value={formData.email}
-                    onChange={handleChange}
-                    className="w-full pl-12 pr-4 py-4 bg-white/10 border border-white/30 rounded-xl text-white placeholder-purple-200 focus:outline-none focus:ring-2 focus:ring-cyan-400 focus:border-transparent transition-all duration-300 backdrop-blur-sm"
-                    placeholder="Enter your campus email"
-                  />
-                </div>
-              </motion.div>
+{adminOtpRequired ? (
+              /* Admin OTP Verification Form */
+              <form onSubmit={handleAdminOtpSubmit} className="space-y-6">
+                <motion.div className="text-center">
+                  <FiShield className="mx-auto h-16 w-16 text-yellow-400 mb-4" />
+                  <h3 className="text-2xl font-bold text-white mb-2">Admin Security Verification 🔐</h3>
+                  <p className="text-purple-200 text-sm">
+                    An OTP has been sent to your admin email address. Please enter it below to complete login.
+                  </p>
+                </motion.div>
 
-              {/* Password Field */}
-              <motion.div
-                whileHover={{ scale: 1.02 }}
-                className="group"
-              >
-                <label htmlFor="password" className="block text-sm font-semibold text-white mb-2">
-                  🔒 Password
-                </label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                    <FiLock className="h-5 w-5 text-purple-300 group-hover:text-cyan-300 transition-colors" />
+                {/* OTP Input */}
+                <motion.div
+                  whileHover={{ scale: 1.02 }}
+                  className="group"
+                >
+                  <label htmlFor="adminOtp" className="block text-sm font-semibold text-white mb-2">
+                    🔢 6-Digit Verification Code
+                  </label>
+                  <div className="relative">
+                    <input
+                      id="adminOtp"
+                      name="adminOtp"
+                      type="text"
+                      maxLength="6"
+                      pattern="[0-9]{6}"
+                      required
+                      value={adminOtp}
+                      onChange={(e) => setAdminOtp(e.target.value.replace(/[^0-9]/g, ''))}
+                      className="w-full px-4 py-4 bg-white/10 border border-white/30 rounded-xl text-white text-center text-2xl font-mono tracking-wider placeholder-purple-200 focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-transparent transition-all duration-300 backdrop-blur-sm"
+                      placeholder="000000"
+                    />
                   </div>
-                  <input
-                    id="password"
-                    name="password"
-                    type={showPassword ? 'text' : 'password'}
-                    autoComplete="current-password"
-                    required
-                    value={formData.password}
-                    onChange={handleChange}
-                    className="w-full pl-12 pr-12 py-4 bg-white/10 border border-white/30 rounded-xl text-white placeholder-purple-200 focus:outline-none focus:ring-2 focus:ring-cyan-400 focus:border-transparent transition-all duration-300 backdrop-blur-sm"
-                    placeholder="Enter your password"
-                  />
+                  <p className="text-xs text-purple-200 mt-1">Enter the 6-digit code sent to your admin email</p>
+                </motion.div>
+
+                {/* Action Buttons */}
+                <div className="space-y-3">
                   <motion.button
-                    whileHover={{ scale: 1.1 }}
-                    whileTap={{ scale: 0.9 }}
-                    type="button"
-                    className="absolute inset-y-0 right-0 pr-4 flex items-center"
-                    onClick={() => setShowPassword(!showPassword)}
+                    whileHover={{ scale: 1.05, boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.2)" }}
+                    whileTap={{ scale: 0.95 }}
+                    type="submit"
+                    disabled={verifyingAdminOtp || adminOtp.length !== 6}
+                    className="w-full bg-gradient-to-r from-yellow-500 to-orange-600 text-white font-bold py-4 px-6 rounded-xl shadow-lg hover:shadow-yellow-500/25 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed relative overflow-hidden group"
                   >
-                    {showPassword ? (
-                      <FiEyeOff className="h-5 w-5 text-purple-300 hover:text-cyan-300 transition-colors" />
-                    ) : (
-                      <FiEye className="h-5 w-5 text-purple-300 hover:text-cyan-300 transition-colors" />
-                    )}
+                    <div className="absolute inset-0 bg-gradient-to-r from-red-500 to-pink-500 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                    <span className="relative z-10 flex items-center justify-center">
+                      {verifyingAdminOtp ? (
+                        <>
+                          <motion.div
+                            animate={{ rotate: 360 }}
+                            transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                            className="mr-3"
+                          >
+                            🔄
+                          </motion.div>
+                          Verifying...
+                        </>
+                      ) : (
+                        <>
+                          <FiShield className="mr-2" />
+                          Verify & Enter Admin Panel 🚀
+                        </>
+                      )}
+                    </span>
+                  </motion.button>
+
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    type="button"
+                    onClick={() => {
+                      setAdminOtpRequired(false);
+                      setAdminTempToken('');
+                      setAdminOtp('');
+                    }}
+                    className="w-full bg-white/10 text-purple-200 font-semibold py-3 px-6 rounded-xl border border-white/30 hover:bg-white/20 transition-all duration-300"
+                  >
+                    ← Back to Login
                   </motion.button>
                 </div>
-              </motion.div>
-
-              {/* Remember Me & Forgot Password */}
-              <div className="flex items-center justify-between">
-                <motion.div 
-                  whileHover={{ scale: 1.05 }}
-                  className="flex items-center"
-                >
-                  <input
-                    id="rememberMe"
-                    name="rememberMe"
-                    type="checkbox"
-                    checked={formData.rememberMe}
-                    onChange={handleChange}
-                    className="h-4 w-4 text-cyan-400 focus:ring-cyan-400 border-purple-300 rounded bg-white/10"
-                  />
-                  <label htmlFor="rememberMe" className="ml-3 block text-sm text-purple-200">
-                    Remember me 💭
-                  </label>
-                </motion.div>
-
+              </form>
+            ) : (
+              /* Regular Login Form */
+              <form onSubmit={handleSubmit} className="space-y-6">
+                {/* Email Field */}
                 <motion.div
-                  whileHover={{ scale: 1.05 }}
+                  whileHover={{ scale: 1.02 }}
+                  className="group"
                 >
-                  <Link
-                    to="/forgot-password"
-                    className="text-sm font-semibold text-cyan-300 hover:text-cyan-200 transition-colors duration-300"
-                  >
-                    Forgot password? 🤔
-                  </Link>
+                  <label htmlFor="email" className="block text-sm font-semibold text-white mb-2">
+                    📧 Email Address
+                  </label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                      <FiMail className="h-5 w-5 text-purple-300 group-hover:text-cyan-300 transition-colors" />
+                    </div>
+                    <input
+                      id="email"
+                      name="email"
+                      type="email"
+                      autoComplete="email"
+                      required
+                      value={formData.email}
+                      onChange={handleChange}
+                      className="w-full pl-12 pr-4 py-4 bg-white/10 border border-white/30 rounded-xl text-white placeholder-purple-200 focus:outline-none focus:ring-2 focus:ring-cyan-400 focus:border-transparent transition-all duration-300 backdrop-blur-sm"
+                      placeholder="Enter your campus email"
+                    />
+                  </div>
                 </motion.div>
-              </div>
 
-              {/* Submit Button */}
-              <motion.button
-                whileHover={{ scale: 1.05, boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.2)" }}
-                whileTap={{ scale: 0.95 }}
-                type="submit"
-                disabled={loading}
-                className="w-full bg-gradient-to-r from-cyan-500 to-purple-600 text-white font-bold py-4 px-6 rounded-xl shadow-lg hover:shadow-cyan-500/25 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed relative overflow-hidden group"
-              >
-                <div className="absolute inset-0 bg-gradient-to-r from-pink-500 to-yellow-500 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-                <span className="relative z-10 flex items-center justify-center">
-                  {loading ? (
-                    <>
-                      <motion.div
-                        animate={{ rotate: 360 }}
-                        transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-                        className="mr-3"
-                      >
-                        🌟
-                      </motion.div>
-                      Signing you in...
-                    </>
-                  ) : (
-                    <>
-                      <FiZap className="mr-2" />
-                      Launch into EduSync! 🚀
-                    </>
-                  )}
-                </span>
-              </motion.button>
-            </form>
+                {/* Password Field */}
+                <motion.div
+                  whileHover={{ scale: 1.02 }}
+                  className="group"
+                >
+                  <label htmlFor="password" className="block text-sm font-semibold text-white mb-2">
+                    🔒 Password
+                  </label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                      <FiLock className="h-5 w-5 text-purple-300 group-hover:text-cyan-300 transition-colors" />
+                    </div>
+                    <input
+                      id="password"
+                      name="password"
+                      type={showPassword ? 'text' : 'password'}
+                      autoComplete="current-password"
+                      required
+                      value={formData.password}
+                      onChange={handleChange}
+                      className="w-full pl-12 pr-12 py-4 bg-white/10 border border-white/30 rounded-xl text-white placeholder-purple-200 focus:outline-none focus:ring-2 focus:ring-cyan-400 focus:border-transparent transition-all duration-300 backdrop-blur-sm"
+                      placeholder="Enter your password"
+                    />
+                    <motion.button
+                      whileHover={{ scale: 1.1 }}
+                      whileTap={{ scale: 0.9 }}
+                      type="button"
+                      className="absolute inset-y-0 right-0 pr-4 flex items-center"
+                      onClick={() => setShowPassword(!showPassword)}
+                    >
+                      {showPassword ? (
+                        <FiEyeOff className="h-5 w-5 text-purple-300 hover:text-cyan-300 transition-colors" />
+                      ) : (
+                        <FiEye className="h-5 w-5 text-purple-300 hover:text-cyan-300 transition-colors" />
+                      )}
+                    </motion.button>
+                  </div>
+                </motion.div>
+
+                {/* Remember Me & Forgot Password */}
+                <div className="flex items-center justify-between">
+                  <motion.div 
+                    whileHover={{ scale: 1.05 }}
+                    className="flex items-center"
+                  >
+                    <input
+                      id="rememberMe"
+                      name="rememberMe"
+                      type="checkbox"
+                      checked={formData.rememberMe}
+                      onChange={handleChange}
+                      className="h-4 w-4 text-cyan-400 focus:ring-cyan-400 border-purple-300 rounded bg-white/10"
+                    />
+                    <label htmlFor="rememberMe" className="ml-3 block text-sm text-purple-200">
+                      Remember me 💭
+                    </label>
+                  </motion.div>
+
+                  <motion.div
+                    whileHover={{ scale: 1.05 }}
+                  >
+                    <Link
+                      to="/forgot-password"
+                      className="text-sm font-semibold text-cyan-300 hover:text-cyan-200 transition-colors duration-300"
+                    >
+                      Forgot password? 🤔
+                    </Link>
+                  </motion.div>
+                </div>
+
+                {/* Submit Button */}
+                <motion.button
+                  whileHover={{ scale: 1.05, boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.2)" }}
+                  whileTap={{ scale: 0.95 }}
+                  type="submit"
+                  disabled={loading}
+                  className="w-full bg-gradient-to-r from-cyan-500 to-purple-600 text-white font-bold py-4 px-6 rounded-xl shadow-lg hover:shadow-cyan-500/25 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed relative overflow-hidden group"
+                >
+                  <div className="absolute inset-0 bg-gradient-to-r from-pink-500 to-yellow-500 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                  <span className="relative z-10 flex items-center justify-center">
+                    {loading ? (
+                      <>
+                        <motion.div
+                          animate={{ rotate: 360 }}
+                          transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                          className="mr-3"
+                        >
+                          🌟
+                        </motion.div>
+                        Signing you in...
+                      </>
+                    ) : (
+                      <>
+                        <FiZap className="mr-2" />
+                        Launch into EduSync! 🚀
+                      </>
+                    )}
+                  </span>
+                </motion.button>
+              </form>
+            )}
           </div>
         </motion.div>
 

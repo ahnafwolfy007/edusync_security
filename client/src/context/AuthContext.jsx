@@ -59,6 +59,17 @@ export const AuthProvider = ({ children }) => {
         return { success: false, message: msg };
       }
 
+      // Check if admin requires OTP
+      if (response.data.requiresOtp && response.data.tempToken) {
+        return {
+          success: true,
+          requiresOtp: true,
+          tempToken: response.data.tempToken,
+          message: response.data.message
+        };
+      }
+
+      // Normal login flow for non-admin users
       const { user: userData, accessToken, refreshToken } = response.data.data;
 
       // Store tokens and user data with port-specific keys
@@ -100,6 +111,52 @@ export const AuthProvider = ({ children }) => {
 
       // Fallback for other errors
       const fallback = data?.message || 'Login failed. Please try again.';
+      return { success: false, message: fallback };
+    }
+  };
+
+  // Verify admin login OTP
+  const verifyAdminOtp = async (tempToken, otp) => {
+    try {
+      const response = await api.post('/auth/verify-admin-otp', { 
+        tempToken, 
+        otp 
+      });
+
+      if (!response?.data?.success) {
+        const msg = response?.data?.message || 'OTP verification failed';
+        return { success: false, message: msg };
+      }
+
+      const { user: userData, accessToken, refreshToken } = response.data.data;
+
+      // Store tokens and user data with port-specific keys
+      sessionManager.setItem('accessToken', accessToken);
+      sessionManager.setItem('refreshToken', refreshToken);
+      sessionManager.setItem('userData', JSON.stringify(userData));
+      sessionManager.setItem('userRole', userData.role_name || userData.role);
+
+      // Set default authorization header
+      api.defaults.headers.common['Authorization'] = `Bearer ${accessToken}`;
+
+      const normalized = {
+        ...userData,
+        name: userData.full_name || userData.fullName || userData.name,
+        avatar: userData.profile_picture || userData.avatar
+      };
+      setUser(normalized);
+      setIsAuthenticated(true);
+
+      return { success: true, user: userData };
+    } catch (error) {
+      const status = error?.response?.status;
+      const data = error?.response?.data || {};
+      
+      if (status === 400) {
+        return { success: false, message: data?.message || 'Invalid or expired OTP' };
+      }
+      
+      const fallback = data?.message || 'OTP verification failed. Please try again.';
       return { success: false, message: fallback };
     }
   };
@@ -257,6 +314,7 @@ export const AuthProvider = ({ children }) => {
     isAdmin,
     isModerator,
     isBusinessOwner,
+    verifyAdminOtp,
     sessionManager, // Expose session manager for debugging
     getActiveSessions: () => sessionManager.getActiveSessions(),
     switchToSession: (port) => sessionManager.switchToSession(port)
