@@ -1,8 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { FiMail, FiLock, FiEye, FiEyeOff, FiUser, FiPhone, FiMapPin, FiShield } from 'react-icons/fi';
+import { FiMail, FiLock, FiEye, FiEyeOff, FiUser, FiPhone, FiMapPin, FiShield, FiCheck, FiX } from 'react-icons/fi';
 import { useAuth } from '../context/AuthContext';
 import { useNotification } from '../context/NotificationContext';
+import { motion } from 'framer-motion';
 
 const Register = () => {
   const navigate = useNavigate();
@@ -54,24 +55,42 @@ const Register = () => {
     { id: 'admin', name: 'Admin', description: 'Platform administrator (requires special OTP)' }
   ];
 
-  // Password strength logic (score 0-4) -> label & color
-  function passwordScore(pw) {
-    let score = 0;
-    if (!pw) return 0;
-    if (pw.length >= 8) score++;
-    if (/[A-Z]/.test(pw)) score++;
-    if (/[0-9]/.test(pw)) score++;
-    if (/[^A-Za-z0-9]/.test(pw)) score++;
-    return score;
-  }
-  const strength = passwordScore(formData.password);
-  const strengthMeta = [
-    { label: 'Too Weak', color: 'bg-red-500', bar: 0 },
-    { label: 'Weak', color: 'bg-orange-500', bar: 25 },
-    { label: 'Fair', color: 'bg-yellow-500', bar: 50 },
-    { label: 'Good', color: 'bg-blue-500', bar: 75 },
-    { label: 'Strong', color: 'bg-green-600', bar: 100 }
-  ][strength];
+  // Enhanced password strength checker
+  const getPasswordStrength = (password) => {
+    const requirements = {
+      minLength: password.length >= 8,
+      hasUpperCase: /[A-Z]/.test(password),
+      hasLowerCase: /[a-z]/.test(password),
+      hasNumber: /[0-9]/.test(password),
+      hasSpecial: /[^A-Za-z0-9]/.test(password)
+    };
+
+    const metCount = Object.values(requirements).filter(Boolean).length;
+    
+    let strength = {
+      score: 0,
+      label: 'Too Weak',
+      color: 'bg-gray-300',
+      textColor: 'text-gray-600',
+      percentage: 0
+    };
+
+    if (metCount === 0) {
+      strength = { score: 0, label: 'Too Weak', color: 'bg-gray-300', textColor: 'text-gray-600', percentage: 0 };
+    } else if (metCount === 1 || metCount === 2) {
+      strength = { score: 1, label: 'Weak', color: 'bg-red-500', textColor: 'text-red-600', percentage: 25 };
+    } else if (metCount === 3) {
+      strength = { score: 2, label: 'Fair', color: 'bg-yellow-500', textColor: 'text-yellow-600', percentage: 50 };
+    } else if (metCount === 4) {
+      strength = { score: 3, label: 'Good', color: 'bg-blue-500', textColor: 'text-blue-600', percentage: 75 };
+    } else if (metCount === 5) {
+      strength = { score: 4, label: 'Strong', color: 'bg-green-500', textColor: 'text-green-600', percentage: 100 };
+    }
+
+    return { ...strength, requirements };
+  };
+
+  const passwordStrength = getPasswordStrength(formData.password);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -137,14 +156,36 @@ const Register = () => {
   };
 
   const validateStep3 = () => {
-  const newErrors = {};
-  if (!formData.password) newErrors.password = 'Password required';
-  else if (formData.password.length < 8) newErrors.password = 'At least 8 characters';
-  if (formData.password !== formData.confirmPassword) newErrors.confirmPassword = 'Passwords do not match';
-  if (!formData.agreeToTerms) newErrors.agreeToTerms = 'Required';
-  if (!formData.agreeToPrivacy) newErrors.agreeToPrivacy = 'Required';
-  setErrors(prev => ({ ...prev, ...newErrors }));
-  if (Object.keys(newErrors).length) return false;
+    const newErrors = {};
+    
+    if (!formData.password) {
+      newErrors.password = 'Password required';
+    } else {
+      const strength = getPasswordStrength(formData.password);
+      const requirements = strength.requirements;
+      
+      if (!requirements.minLength) {
+        newErrors.password = 'Password must be at least 8 characters';
+      } else if (!requirements.hasUpperCase) {
+        newErrors.password = 'Password must contain at least one uppercase letter';
+      } else if (!requirements.hasLowerCase) {
+        newErrors.password = 'Password must contain at least one lowercase letter';
+      } else if (!requirements.hasNumber) {
+        newErrors.password = 'Password must contain at least one number';
+      } else if (!requirements.hasSpecial) {
+        newErrors.password = 'Password must contain at least one special character';
+      }
+    }
+    
+    if (formData.password !== formData.confirmPassword) {
+      newErrors.confirmPassword = 'Passwords do not match';
+    }
+    
+    if (!formData.agreeToTerms) newErrors.agreeToTerms = 'Required';
+    if (!formData.agreeToPrivacy) newErrors.agreeToPrivacy = 'Required';
+    
+    setErrors(prev => ({ ...prev, ...newErrors }));
+    if (Object.keys(newErrors).length) return false;
     return true;
   };
 
@@ -413,18 +454,22 @@ const Register = () => {
     </div>
   );
 
-  const renderStep3 = () => (
+  const renderStep3 = () => {
+    console.log('renderStep3 called, formData.password:', formData.password);
+    console.log('passwordStrength:', passwordStrength);
+    
+    return (
     <div className="space-y-6">
       <div className="text-center mb-6">
         <h3 className="text-lg font-medium text-gray-900">Create Password</h3>
-  <p className="text-sm text-gray-600">Choose a strong password for your account</p>
+        <p className="text-sm text-gray-600">Choose a strong password for your account</p>
       </div>
 
       <div className="form-group">
-        <label htmlFor="password" className="block text-sm font-medium text-white mb-2">Password</label>
+        <label htmlFor="password" className="form-label">Password</label>
         <div className="relative">
           <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-            <FiLock className="h-5 w-5 text-blue-300" />
+            <FiLock className="h-5 w-5 text-gray-400" />
           </div>
           <input
             id="password"
@@ -433,7 +478,7 @@ const Register = () => {
             required
             value={formData.password}
             onChange={handleChange}
-            className="w-full pl-10 pr-12 py-3 bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl text-white placeholder-blue-200 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+            className="form-input pl-10 pr-12"
             placeholder="Create a password"
           />
           <button
@@ -442,32 +487,104 @@ const Register = () => {
             onClick={() => setShowPassword(!showPassword)}
           >
             {showPassword ? (
-              <FiEyeOff className="h-5 w-5 text-blue-300 hover:text-white transition-colors" />
+              <FiEyeOff className="h-5 w-5 text-gray-400 hover:text-gray-600 transition-colors" />
             ) : (
-              <FiEye className="h-5 w-5 text-blue-300 hover:text-white transition-colors" />
+              <FiEye className="h-5 w-5 text-gray-400 hover:text-gray-600 transition-colors" />
             )}
           </button>
         </div>
-        <div className="mt-2">
-          <div className="w-full h-2 bg-white/20 rounded overflow-hidden">
-            <div
-              className={`h-2 transition-all duration-300 ${strengthMeta.color}`}
-              style={{ width: `${strengthMeta.bar}%` }}
-            />
+        
+        {/* Password Strength Indicator - Always visible */}
+        <div className="mt-3 space-y-3">
+          {/* Strength Bar - Only show when password has content */}
+          {formData.password && (
+            <div>
+              <div className="flex justify-between items-center mb-2">
+                <span className="text-xs font-medium text-gray-700">Password Strength</span>
+                <span className={`text-xs font-semibold ${passwordStrength.textColor}`}>
+                  {passwordStrength.label}
+                </span>
+              </div>
+              <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
+                <motion.div
+                  initial={{ width: 0 }}
+                  animate={{ width: `${passwordStrength.percentage}%` }}
+                  transition={{ duration: 0.3 }}
+                  className={`h-full ${passwordStrength.color} transition-all duration-300`}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Requirements Checklist - Always visible */}
+          <div className="bg-yellow-50 border-4 border-blue-500 rounded-lg p-4 space-y-2">
+            <p className="text-lg font-bold text-red-600 mb-2">🔒 Password Requirements:</p>
+            
+            <div className="flex items-center space-x-2">
+              {passwordStrength.requirements.minLength ? (
+                <FiCheck className="h-4 w-4 text-green-600 flex-shrink-0" />
+              ) : (
+                <FiX className="h-4 w-4 text-gray-400 flex-shrink-0" />
+              )}
+              <span className={`text-xs ${passwordStrength.requirements.minLength ? 'text-green-600 font-medium' : 'text-gray-600'}`}>
+                At least 8 characters
+              </span>
+            </div>
+
+            <div className="flex items-center space-x-2">
+              {passwordStrength.requirements.hasUpperCase ? (
+                <FiCheck className="h-4 w-4 text-green-600 flex-shrink-0" />
+              ) : (
+                <FiX className="h-4 w-4 text-gray-400 flex-shrink-0" />
+              )}
+              <span className={`text-xs ${passwordStrength.requirements.hasUpperCase ? 'text-green-600 font-medium' : 'text-gray-600'}`}>
+                One uppercase letter (A-Z)
+              </span>
+            </div>
+
+            <div className="flex items-center space-x-2">
+              {passwordStrength.requirements.hasLowerCase ? (
+                <FiCheck className="h-4 w-4 text-green-600 flex-shrink-0" />
+              ) : (
+                <FiX className="h-4 w-4 text-gray-400 flex-shrink-0" />
+              )}
+              <span className={`text-xs ${passwordStrength.requirements.hasLowerCase ? 'text-green-600 font-medium' : 'text-gray-600'}`}>
+                One lowercase letter (a-z)
+              </span>
+            </div>
+
+            <div className="flex items-center space-x-2">
+              {passwordStrength.requirements.hasNumber ? (
+                <FiCheck className="h-4 w-4 text-green-600 flex-shrink-0" />
+              ) : (
+                <FiX className="h-4 w-4 text-gray-400 flex-shrink-0" />
+              )}
+              <span className={`text-xs ${passwordStrength.requirements.hasNumber ? 'text-green-600 font-medium' : 'text-gray-600'}`}>
+                One number (0-9)
+              </span>
+            </div>
+
+            <div className="flex items-center space-x-2">
+              {passwordStrength.requirements.hasSpecial ? (
+                <FiCheck className="h-4 w-4 text-green-600 flex-shrink-0" />
+              ) : (
+                <FiX className="h-4 w-4 text-gray-400 flex-shrink-0" />
+              )}
+              <span className={`text-xs ${passwordStrength.requirements.hasSpecial ? 'text-green-600 font-medium' : 'text-gray-600'}`}>
+                One special character (!@#$%^&*)
+              </span>
+            </div>
           </div>
-          <p className="text-xs mt-1 font-medium text-blue-200 flex items-center">
-            Strength: <span className="ml-1 text-white font-semibold">{strengthMeta.label}</span>
-          </p>
-          <p className="text-xs text-blue-200 mt-1">Min 8 chars, include upper, number, symbol. 3 of 4 rules needed.</p>
         </div>
-        {errors.password && <p className="text-xs text-red-300 mt-1 font-medium">{errors.password}</p>}
+        
+        {errors.password && <p className="text-xs text-red-600 mt-2 font-medium">{errors.password}</p>}
       </div>
 
       <div className="form-group">
-        <label htmlFor="confirmPassword" className="block text-sm font-medium text-white mb-2">Confirm Password</label>
+        <label htmlFor="confirmPassword" className="form-label">Confirm Password</label>
         <div className="relative">
           <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-            <FiLock className="h-5 w-5 text-blue-300" />
+            <FiLock className="h-5 w-5 text-gray-400" />
           </div>
           <input
             id="confirmPassword"
@@ -476,7 +593,7 @@ const Register = () => {
             required
             value={formData.confirmPassword}
             onChange={handleChange}
-            className="w-full pl-10 pr-12 py-3 bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl text-white placeholder-blue-200 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+            className="form-input pl-10 pr-12"
             placeholder="Confirm your password"
           />
           <button
@@ -485,19 +602,37 @@ const Register = () => {
             onClick={() => setShowConfirmPassword(!showConfirmPassword)}
           >
             {showConfirmPassword ? (
-              <FiEyeOff className="h-5 w-5 text-blue-300 hover:text-white transition-colors" />
+              <FiEyeOff className="h-5 w-5 text-gray-400 hover:text-gray-600 transition-colors" />
             ) : (
-              <FiEye className="h-5 w-5 text-blue-300 hover:text-white transition-colors" />
+              <FiEye className="h-5 w-5 text-gray-400 hover:text-gray-600 transition-colors" />
             )}
           </button>
         </div>
-        {errors.confirmPassword && <p className="text-xs text-red-300 mt-1 font-medium">{errors.confirmPassword}</p>}
+        
+        {/* Password Match Indicator */}
+        {formData.confirmPassword && (
+          <div className="mt-2 flex items-center space-x-2">
+            {formData.password === formData.confirmPassword ? (
+              <>
+                <FiCheck className="h-4 w-4 text-green-600" />
+                <span className="text-xs text-green-600 font-medium">Passwords match</span>
+              </>
+            ) : (
+              <>
+                <FiX className="h-4 w-4 text-red-600" />
+                <span className="text-xs text-red-600 font-medium">Passwords do not match</span>
+              </>
+            )}
+          </div>
+        )}
+        
+        {errors.confirmPassword && <p className="text-xs text-red-600 mt-2 font-medium">{errors.confirmPassword}</p>}
       </div>
 
       <div className="space-y-4">
         <motion.div 
           whileHover={{ scale: 1.01 }}
-          className="flex items-start p-3 rounded-xl bg-white/5 backdrop-blur-sm border border-white/10 hover:bg-white/10 transition-all duration-200"
+          className="flex items-start p-3 rounded-lg bg-gray-50 border border-gray-200 hover:bg-gray-100 transition-all duration-200"
         >
           <input
             id="agreeToTerms"
@@ -505,20 +640,20 @@ const Register = () => {
             type="checkbox"
             checked={formData.agreeToTerms}
             onChange={handleChange}
-            className="mt-1 h-4 w-4 text-blue-600 focus:ring-blue-500 border-white/30 rounded bg-white/10"
+            className="mt-1 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
           />
-          <label htmlFor="agreeToTerms" className="ml-3 text-sm text-white">
+          <label htmlFor="agreeToTerms" className="ml-3 text-sm text-gray-700">
             I agree to the{' '}
-            <Link to="/terms" className="text-blue-300 hover:text-blue-200 underline font-medium">
+            <Link to="/terms" className="text-blue-600 hover:text-blue-700 underline font-medium">
               Terms of Service
             </Link>
           </label>
         </motion.div>
-        {errors.agreeToTerms && <p className="text-xs text-red-300 -mt-2 font-medium">{errors.agreeToTerms}</p>}
+        {errors.agreeToTerms && <p className="text-xs text-red-600 -mt-2 font-medium">{errors.agreeToTerms}</p>}
 
         <motion.div 
           whileHover={{ scale: 1.01 }}
-          className="flex items-start p-3 rounded-xl bg-white/5 backdrop-blur-sm border border-white/10 hover:bg-white/10 transition-all duration-200"
+          className="flex items-start p-3 rounded-lg bg-gray-50 border border-gray-200 hover:bg-gray-100 transition-all duration-200"
         >
           <input
             id="agreeToPrivacy"
@@ -526,19 +661,20 @@ const Register = () => {
             type="checkbox"
             checked={formData.agreeToPrivacy}
             onChange={handleChange}
-            className="mt-1 h-4 w-4 text-blue-600 focus:ring-blue-500 border-white/30 rounded bg-white/10"
+            className="mt-1 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
           />
-          <label htmlFor="agreeToPrivacy" className="ml-3 text-sm text-white">
+          <label htmlFor="agreeToPrivacy" className="ml-3 text-sm text-gray-700">
             I agree to the{' '}
-            <Link to="/privacy" className="text-blue-300 hover:text-blue-200 underline font-medium">
+            <Link to="/privacy" className="text-blue-600 hover:text-blue-700 underline font-medium">
               Privacy Policy
             </Link>
           </label>
         </motion.div>
-        {errors.agreeToPrivacy && <p className="text-xs text-red-300 -mt-2 font-medium">{errors.agreeToPrivacy}</p>}
+        {errors.agreeToPrivacy && <p className="text-xs text-red-600 -mt-2 font-medium">{errors.agreeToPrivacy}</p>}
       </div>
     </div>
-  );
+    );
+  };
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">

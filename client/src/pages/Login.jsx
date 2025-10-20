@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { FiMail, FiLock, FiEye, FiEyeOff, FiZap, FiShield, FiStar, FiTrendingUp } from 'react-icons/fi';
+import { FiMail, FiLock, FiEye, FiEyeOff, FiZap, FiShield, FiStar, FiTrendingUp, FiCheck, FiX } from 'react-icons/fi';
 import { motion } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
 import { useNotification } from '../context/NotificationContext';
@@ -27,6 +27,43 @@ const Login = () => {
   const [verifyingAdminOtp, setVerifyingAdminOtp] = useState(false);
 
   const from = location.state?.from?.pathname || '/dashboard';
+
+  // Enhanced password strength checker
+  const getPasswordStrength = (password) => {
+    const requirements = {
+      minLength: password.length >= 8,
+      hasUpperCase: /[A-Z]/.test(password),
+      hasLowerCase: /[a-z]/.test(password),
+      hasNumber: /[0-9]/.test(password),
+      hasSpecial: /[^A-Za-z0-9]/.test(password)
+    };
+
+    const metCount = Object.values(requirements).filter(Boolean).length;
+    
+    let strength = {
+      score: 0,
+      label: 'Too Weak',
+      color: 'bg-gray-300',
+      textColor: 'text-gray-400',
+      percentage: 0
+    };
+
+    if (metCount === 0) {
+      strength = { score: 0, label: 'Too Weak', color: 'bg-gray-300', textColor: 'text-gray-400', percentage: 0 };
+    } else if (metCount === 1 || metCount === 2) {
+      strength = { score: 1, label: 'Weak', color: 'bg-red-500', textColor: 'text-red-400', percentage: 25 };
+    } else if (metCount === 3) {
+      strength = { score: 2, label: 'Fair', color: 'bg-yellow-500', textColor: 'text-yellow-400', percentage: 50 };
+    } else if (metCount === 4) {
+      strength = { score: 3, label: 'Good', color: 'bg-blue-500', textColor: 'text-blue-400', percentage: 75 };
+    } else if (metCount === 5) {
+      strength = { score: 4, label: 'Strong', color: 'bg-green-500', textColor: 'text-green-400', percentage: 100 };
+    }
+
+    return { ...strength, requirements };
+  };
+
+  const passwordStrength = getPasswordStrength(formData.password);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -375,6 +412,89 @@ const Login = () => {
                         <FiEye className="h-5 w-5 text-purple-300 hover:text-cyan-300 transition-colors" />
                       )}
                     </motion.button>
+                  </div>
+
+                  {/* Password Strength Indicator - Always visible */}
+                  <div className="mt-3 space-y-3">
+                    {/* Strength Bar - Only show when password has content */}
+                    {formData.password && (
+                      <div>
+                        <div className="flex justify-between items-center mb-2">
+                          <span className="text-xs font-medium text-white">Password Strength</span>
+                          <span className={`text-xs font-semibold ${passwordStrength.textColor}`}>
+                            {passwordStrength.label}
+                          </span>
+                        </div>
+                        <div className="w-full h-2 bg-white/20 rounded-full overflow-hidden">
+                          <motion.div
+                            initial={{ width: 0 }}
+                            animate={{ width: `${passwordStrength.percentage}%` }}
+                            transition={{ duration: 0.3 }}
+                            className={`h-full ${passwordStrength.color} transition-all duration-300`}
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Requirements Checklist - Always visible */}
+                    <div className="bg-white/5 backdrop-blur-sm rounded-lg p-4 space-y-2 border border-white/10">
+                      <p className="text-xs font-medium text-white mb-2">🔒 Password Requirements:</p>
+                      
+                      <div className="flex items-center space-x-2">
+                        {passwordStrength.requirements.minLength ? (
+                          <FiCheck className="h-4 w-4 text-green-400 flex-shrink-0" />
+                        ) : (
+                          <FiX className="h-4 w-4 text-gray-500 flex-shrink-0" />
+                        )}
+                        <span className={`text-xs ${passwordStrength.requirements.minLength ? 'text-green-400 font-medium' : 'text-purple-200'}`}>
+                          At least 8 characters
+                        </span>
+                      </div>
+
+                      <div className="flex items-center space-x-2">
+                        {passwordStrength.requirements.hasUpperCase ? (
+                          <FiCheck className="h-4 w-4 text-green-400 flex-shrink-0" />
+                        ) : (
+                          <FiX className="h-4 w-4 text-gray-500 flex-shrink-0" />
+                        )}
+                        <span className={`text-xs ${passwordStrength.requirements.hasUpperCase ? 'text-green-400 font-medium' : 'text-purple-200'}`}>
+                          One uppercase letter (A-Z)
+                        </span>
+                      </div>
+
+                      <div className="flex items-center space-x-2">
+                        {passwordStrength.requirements.hasLowerCase ? (
+                          <FiCheck className="h-4 w-4 text-green-400 flex-shrink-0" />
+                        ) : (
+                          <FiX className="h-4 w-4 text-gray-500 flex-shrink-0" />
+                        )}
+                        <span className={`text-xs ${passwordStrength.requirements.hasLowerCase ? 'text-green-400 font-medium' : 'text-purple-200'}`}>
+                          One lowercase letter (a-z)
+                        </span>
+                      </div>
+
+                      <div className="flex items-center space-x-2">
+                        {passwordStrength.requirements.hasNumber ? (
+                          <FiCheck className="h-4 w-4 text-green-400 flex-shrink-0" />
+                        ) : (
+                          <FiX className="h-4 w-4 text-gray-500 flex-shrink-0" />
+                        )}
+                        <span className={`text-xs ${passwordStrength.requirements.hasNumber ? 'text-green-400 font-medium' : 'text-purple-200'}`}>
+                          One number (0-9)
+                        </span>
+                      </div>
+
+                      <div className="flex items-center space-x-2">
+                        {passwordStrength.requirements.hasSpecial ? (
+                          <FiCheck className="h-4 w-4 text-green-400 flex-shrink-0" />
+                        ) : (
+                          <FiX className="h-4 w-4 text-gray-500 flex-shrink-0" />
+                        )}
+                        <span className={`text-xs ${passwordStrength.requirements.hasSpecial ? 'text-green-400 font-medium' : 'text-purple-200'}`}>
+                          One special character (!@#$%^&*)
+                        </span>
+                      </div>
+                    </div>
                   </div>
                 </motion.div>
 

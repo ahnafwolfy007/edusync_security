@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { FaArrowLeft, FaGoogle, FaMicrosoft } from 'react-icons/fa';
-import { FiMail, FiLock, FiUser, FiPhone, FiMapPin, FiShield } from 'react-icons/fi';
+import { FiMail, FiLock, FiUser, FiPhone, FiMapPin, FiShield, FiCheck, FiX } from 'react-icons/fi';
 import { useAuth } from '../context/AuthContext';
 import { useNotification } from '../context/NotificationContext';
 
@@ -62,6 +62,43 @@ export default function AuthToggle() {
   // Helpers
   const setField = (setFn) => (e) => setFn(prev => ({ ...prev, [e.target.name]: e.target.value }));
   const emailIsValid = (e) => /.+@.+\..+/.test(e) && e.toLowerCase().endsWith(allowedDomain);
+
+  // Enhanced password strength checker
+  const getPasswordStrength = (password) => {
+    const requirements = {
+      minLength: password.length >= 8,
+      hasUpperCase: /[A-Z]/.test(password),
+      hasLowerCase: /[a-z]/.test(password),
+      hasNumber: /[0-9]/.test(password),
+      hasSpecial: /[^A-Za-z0-9]/.test(password)
+    };
+
+    const metCount = Object.values(requirements).filter(Boolean).length;
+    
+    let strength = {
+      score: 0,
+      label: 'Too Weak',
+      color: 'bg-gray-300',
+      textColor: 'text-gray-600',
+      percentage: 0
+    };
+
+    if (metCount === 0) {
+      strength = { score: 0, label: 'Too Weak', color: 'bg-gray-300', textColor: 'text-gray-600', percentage: 0 };
+    } else if (metCount === 1 || metCount === 2) {
+      strength = { score: 1, label: 'Weak', color: 'bg-red-500', textColor: 'text-red-600', percentage: 25 };
+    } else if (metCount === 3) {
+      strength = { score: 2, label: 'Fair', color: 'bg-yellow-500', textColor: 'text-yellow-600', percentage: 50 };
+    } else if (metCount === 4) {
+      strength = { score: 3, label: 'Good', color: 'bg-blue-500', textColor: 'text-blue-600', percentage: 75 };
+    } else if (metCount === 5) {
+      strength = { score: 4, label: 'Strong', color: 'bg-green-500', textColor: 'text-green-600', percentage: 100 };
+    }
+
+    return { ...strength, requirements };
+  };
+
+  const passwordStrength = getPasswordStrength(reg.password);
 
   // Login submit
   const submitLogin = async (e) => {
@@ -402,6 +439,88 @@ export default function AuthToggle() {
                         <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"><FiLock className="h-5 w-5 text-gray-400" /></div>
                         <input name="password" type="password" value={reg.password} onChange={setField(setReg)} required className="w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Create a password (min 8 chars)" />
                       </div>
+                      
+                      {/* Password Strength Indicator - Always visible */}
+                      <div className="mt-3 space-y-3">
+                        {/* Strength Bar - Only show when password has content */}
+                        {reg.password && (
+                          <div>
+                            <div className="flex justify-between items-center mb-2">
+                              <span className="text-xs font-medium text-gray-700">Password Strength</span>
+                              <span className={`text-xs font-semibold ${passwordStrength.textColor}`}>
+                                {passwordStrength.label}
+                              </span>
+                            </div>
+                            <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
+                              <div
+                                className={`h-full ${passwordStrength.color} transition-all duration-300`}
+                                style={{ width: `${passwordStrength.percentage}%` }}
+                              />
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Requirements Checklist - Always visible */}
+                        <div className="bg-gray-50 rounded-lg p-4 space-y-2 border border-gray-200">
+                          <p className="text-xs font-medium text-gray-700 mb-2">🔒 Password Requirements:</p>
+                          
+                          <div className="flex items-center space-x-2">
+                            {passwordStrength.requirements.minLength ? (
+                              <FiCheck className="h-4 w-4 text-green-600 flex-shrink-0" />
+                            ) : (
+                              <FiX className="h-4 w-4 text-gray-400 flex-shrink-0" />
+                            )}
+                            <span className={`text-xs ${passwordStrength.requirements.minLength ? 'text-green-600 font-medium' : 'text-gray-600'}`}>
+                              At least 8 characters
+                            </span>
+                          </div>
+
+                          <div className="flex items-center space-x-2">
+                            {passwordStrength.requirements.hasUpperCase ? (
+                              <FiCheck className="h-4 w-4 text-green-600 flex-shrink-0" />
+                            ) : (
+                              <FiX className="h-4 w-4 text-gray-400 flex-shrink-0" />
+                            )}
+                            <span className={`text-xs ${passwordStrength.requirements.hasUpperCase ? 'text-green-600 font-medium' : 'text-gray-600'}`}>
+                              One uppercase letter (A-Z)
+                            </span>
+                          </div>
+
+                          <div className="flex items-center space-x-2">
+                            {passwordStrength.requirements.hasLowerCase ? (
+                              <FiCheck className="h-4 w-4 text-green-600 flex-shrink-0" />
+                            ) : (
+                              <FiX className="h-4 w-4 text-gray-400 flex-shrink-0" />
+                            )}
+                            <span className={`text-xs ${passwordStrength.requirements.hasLowerCase ? 'text-green-600 font-medium' : 'text-gray-600'}`}>
+                              One lowercase letter (a-z)
+                            </span>
+                          </div>
+
+                          <div className="flex items-center space-x-2">
+                            {passwordStrength.requirements.hasNumber ? (
+                              <FiCheck className="h-4 w-4 text-green-600 flex-shrink-0" />
+                            ) : (
+                              <FiX className="h-4 w-4 text-gray-400 flex-shrink-0" />
+                            )}
+                            <span className={`text-xs ${passwordStrength.requirements.hasNumber ? 'text-green-600 font-medium' : 'text-gray-600'}`}>
+                              One number (0-9)
+                            </span>
+                          </div>
+
+                          <div className="flex items-center space-x-2">
+                            {passwordStrength.requirements.hasSpecial ? (
+                              <FiCheck className="h-4 w-4 text-green-600 flex-shrink-0" />
+                            ) : (
+                              <FiX className="h-4 w-4 text-gray-400 flex-shrink-0" />
+                            )}
+                            <span className={`text-xs ${passwordStrength.requirements.hasSpecial ? 'text-green-600 font-medium' : 'text-gray-600'}`}>
+                              One special character (!@#$%^&*)
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                      
                       {errors.password && <p className="text-xs text-red-600 mt-1">{errors.password}</p>}
                     </div>
                     <div>
@@ -410,6 +529,24 @@ export default function AuthToggle() {
                         <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"><FiLock className="h-5 w-5 text-gray-400" /></div>
                         <input name="confirmPassword" type="password" value={reg.confirmPassword} onChange={setField(setReg)} required className="w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Confirm your password" />
                       </div>
+                      
+                      {/* Password Match Indicator */}
+                      {reg.confirmPassword && (
+                        <div className="mt-2 flex items-center space-x-2">
+                          {reg.password === reg.confirmPassword ? (
+                            <>
+                              <FiCheck className="h-4 w-4 text-green-600" />
+                              <span className="text-xs text-green-600 font-medium">Passwords match</span>
+                            </>
+                          ) : (
+                            <>
+                              <FiX className="h-4 w-4 text-red-600" />
+                              <span className="text-xs text-red-600 font-medium">Passwords do not match</span>
+                            </>
+                          )}
+                        </div>
+                      )}
+                      
                       {errors.confirmPassword && <p className="text-xs text-red-600 mt-1">{errors.confirmPassword}</p>}
                     </div>
                     <div className="flex gap-3">
