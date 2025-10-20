@@ -89,9 +89,24 @@ class UserController {
   async updateProfile(req, res) {
     try {
       const userId = req.user.userId;
-      const { fullName, phone, institution, location } = req.body;
+      let { fullName, phone, institution, location } = req.body;
 
       const db = dbConfig.db;
+
+      // Sanitize inputs before processing
+      if (fullName !== undefined) fullName = InputSanitizer.sanitizeText(fullName, 100);
+      if (phone !== undefined) {
+        const validatedPhone = InputSanitizer.validatePhone(phone);
+        if (!validatedPhone) {
+          return res.status(400).json({
+            success: false,
+            message: 'Invalid phone number format'
+          });
+        }
+        phone = validatedPhone;
+      }
+      if (institution !== undefined) institution = InputSanitizer.sanitizeText(institution, 100);
+      if (location !== undefined) location = InputSanitizer.sanitizeText(location, 200);
 
       // Build update query dynamically
       const updates = [];

@@ -1,11 +1,12 @@
 const dbConfig = require('../config/db');
+const InputSanitizer = require('../utils/inputSanitization');
 
 class BusinessController {
   // Apply for business verification
   async applyForBusiness(req, res) {
     try {
       const userId = req.user.userId;
-      const { businessName, businessType, licenseInfo } = req.body;
+      let { businessName, businessType, licenseInfo } = req.body;
 
       if (!businessName || !businessType) {
         return res.status(400).json({
@@ -13,6 +14,11 @@ class BusinessController {
           message: 'Business name and type are required'
         });
       }
+
+      // Sanitize inputs
+      businessName = InputSanitizer.sanitizeText(businessName, 200);
+      businessType = InputSanitizer.sanitizeText(businessType, 100);
+      if (licenseInfo) licenseInfo = InputSanitizer.sanitizeText(licenseInfo, 500);
 
       const db = dbConfig.db;
 

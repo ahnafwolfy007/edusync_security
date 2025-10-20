@@ -15,11 +15,11 @@ const otpLimiter = rateLimit({
 });
 
 // Public routes
-router.post('/register', authController.register);
-router.post('/request-otp', otpLimiter, authController.requestOtp);
-router.post('/verify-otp', authController.verifyOtp);
-router.post('/login',bruteForceGuard(), authController.login);
-router.post('/verify-admin-otp', authController.verifyAdminLoginOtp);
+router.post('/register', bruteForceGuard(), authController.register);
+router.post('/request-otp', otpLimiter, bruteForceGuard(), authController.requestOtp);
+router.post('/verify-otp', bruteForceGuard(), authController.verifyOtp);
+router.post('/login', bruteForceGuard(), authController.login);
+router.post('/verify-admin-otp', bruteForceGuard(), authController.verifyAdminLoginOtp);
 router.post('/refresh-token', authController.refreshToken);
 router.get('/hash-strategy', authController.hashStrategy);
 // Diagnostic email test (rate limited via global mechanisms if any) - keep public but could restrict by domain later
@@ -28,6 +28,6 @@ router.post('/test-email', authController.testEmail);
 // Protected routes (apply auth per route to avoid accidental protection of public endpoints)
 router.post('/logout', authMiddleware, authController.logout);
 router.get('/profile', authMiddleware, authController.getProfile);
-router.put('/change-password', authMiddleware, authController.changePassword);
+router.put('/change-password', authMiddleware, bruteForceGuard(), authController.changePassword);
 
 module.exports = router;

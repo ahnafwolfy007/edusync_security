@@ -8,7 +8,7 @@ const MAX_FAILS_IP = parseInt(process.env.BF_MAX_FAILS_IP || '20');          // 
 const BASE_COOLDOWN_MS = parseInt(process.env.BF_BASE_COOLDOWN_MS || '5000'); // 5s
 const MAX_COOLDOWN_MS = parseInt(process.env.BF_MAX_COOLDOWN_MS || `${1 * 60 * 1000}`); // 5 min
 const TEMP_LOCK_MS = parseInt(process.env.BF_TEMP_LOCK_MS || `${2 * 60 * 1000}`); // 15 min
-const PAIR_TIGHT_THRESHOLD = parseInt(process.env.BF_PAIR_THRESHOLD || '3'); // stricter per account+ip
+const PAIR_TIGHT_THRESHOLD = parseInt(process.env.BF_PAIR_THRESHOLD || '3'); // Account+IP: 3 attempts triggers lock
 
 // In-memory state maps
 const byAccount = new Map();   // key: normalized email/username
@@ -33,7 +33,9 @@ function getRec(map, key) {
 
 function isBlocked(rec) {
   const t = now();
-  return (rec.lockedUntil && t < rec.lockedUntil) || (rec.cooldownUntil && t < rec.cooldownUntil);
+  // Only check for temporary locks, not cooldowns
+  // This allows users to retry immediately until they hit the failure threshold
+  return (rec.lockedUntil && t < rec.lockedUntil);
 }
 
 function remainingMs(rec) {
@@ -96,15 +98,21 @@ function bruteForceGuard() {
 }
 
 // To be called by the login handler AFTER verifying credentials
+// Returns true if should block (hit threshold), false otherwise
 function recordBruteForceResult({ success }, ctx) {
-  if (!ctx) return;
+  if (!ctx) return false;
   const { acc, ipr, pair } = ctx;
   if (success) {
     reset(acc); reset(ipr); reset(pair);
+    return false;
   } else {
     noteFailure(acc, MAX_FAILS_ACCOUNT);
     noteFailure(ipr, MAX_FAILS_IP);
     noteFailure(pair, Math.min(PAIR_TIGHT_THRESHOLD, MAX_FAILS_ACCOUNT));
+    
+    // Check if account+IP pair has EXACTLY hit the threshold (3 attempts)
+    // Show "too many attempts" message only on the 3rd failed attempt
+    return pair.fails.length === PAIR_TIGHT_THRESHOLD;
   }
 }
 

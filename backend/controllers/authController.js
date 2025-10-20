@@ -12,7 +12,7 @@ class AuthController {
   // Register new user
   async register(req, res) {
     try {
-      const { 
+      let { 
         fullName, 
         email, 
         password, 
@@ -32,20 +32,40 @@ class AuthController {
       // Accept 'name' alias from frontend
       let effectiveFullName = fullName || req.body.name;
 
+      // Sanitize inputs
+      if (effectiveFullName) effectiveFullName = InputSanitizer.sanitizeText(effectiveFullName, 100);
+      if (phone) phone = InputSanitizer.validatePhone(phone);
+      if (institution) institution = InputSanitizer.sanitizeText(institution, 100);
+      if (location) location = InputSanitizer.sanitizeText(location, 100);
+
       // Validation
-  if (!effectiveFullName || !email || !password) {
+      if (!effectiveFullName || !email || !password) {
+        recordBruteForceResult({ success: false }, res.locals._bf);
         return res.status(400).json({
           success: false,
           message: 'Full name, email, and password are required'
         });
       }
 
-      // Enforce institutional domain
-  const allowedDomain = (process.env.ALLOWED_EMAIL_DOMAIN || '@bscse.uiu.ac.bd').toLowerCase();
-      if (!email.toLowerCase().endsWith(allowedDomain)) {
+      // Validate and sanitize email
+      const sanitizedEmail = InputSanitizer.validateEmail(email);
+      if (!sanitizedEmail) {
+        recordBruteForceResult({ success: false }, res.locals._bf);
         return res.status(400).json({
           success: false,
-          message: `Email must end with ${allowedDomain}`
+          message: 'Invalid email format or email does not match allowed domain'
+        });
+      }
+      email = sanitizedEmail;
+
+      // Validate password using InputSanitizer
+      const passwordValidation = InputSanitizer.validatePassword(password);
+      if (!passwordValidation.valid) {
+        recordBruteForceResult({ success: false }, res.locals._bf);
+        return res.status(400).json({
+          success: false,
+          message: 'Password requirements not met',
+          errors: passwordValidation.errors
         });
       }
 
@@ -79,37 +99,12 @@ class AuthController {
         [otpEmail, otpCode]
       );
       if (otpResult.rows.length === 0) {
+        recordBruteForceResult({ success: false }, res.locals._bf);
         return res.status(400).json({
           success: false,
           message: 'Invalid or expired OTP code'
         });
       }
-
-      // Password validation (min 8 chars, upper, lower, number, special)
-      const passwordErrors = [];
-      if (typeof password !== 'string' || password.length < 8) {
-        passwordErrors.push('Password must be at least 8 characters long');
-      }
-      if (!/[A-Z]/.test(password)) {
-        passwordErrors.push('Password must contain at least one uppercase letter');
-      }
-      if (!/[a-z]/.test(password)) {
-        passwordErrors.push('Password must contain at least one lowercase letter');
-      }
-      if (!/[0-9]/.test(password)) {
-        passwordErrors.push('Password must contain at least one number');
-      }
-      if (!/[!@#$%^&*()_+=\-]/.test(password)) {
-        passwordErrors.push('Password must contain at least one special character (*@!@#$%^(_+=-)');
-      }
-      if (passwordErrors.length > 0) {
-        return res.status(400).json({
-          success: false,
-          message: passwordErrors.join('. ')
-        });
-      }
-
-  // DB already assigned above
 
       // Check if user already exists
       const existingUser = await db.query(
@@ -118,14 +113,15 @@ class AuthController {
       );
 
       if (existingUser.rows.length > 0) {
+        recordBruteForceResult({ success: false }, res.locals._bf);
         return res.status(409).json({
           success: false,
           message: 'User with this email already exists'
         });
       }
 
-  // Hash password with email-based salt
-  const hashedPassword = hashPasswordWithEmail(password, email.toLowerCase(), authConfig.CUSTOM_HASH_WORK_FACTOR || 1000, authConfig.CUSTOM_HASH_OUTPUT_BITS || 128);
+      // Hash password with email-based salt
+      const hashedPassword = hashPasswordWithEmail(password, email.toLowerCase(), authConfig.CUSTOM_HASH_WORK_FACTOR || 1000, authConfig.CUSTOM_HASH_OUTPUT_BITS || 128);
       console.log(hashedPassword);
       // Get role_id
       const roleResult = await db.query(
@@ -468,7 +464,16 @@ class AuthController {
 
     // If no user, still record a failed attempt so enumeration/bruteforce is throttled uniformly
     if (userResult.rows.length === 0) {
-      recordBruteForceResult({ success: false }, bfCtx); // note failure for non-existent account as well
+      const shouldBlock = recordBruteForceResult({ success: false }, bfCtx); // note failure for non-existent account as well
+      
+      // If this was the 3rd failed attempt, show "too many attempts" message
+      if (shouldBlock) {
+        return res.status(429).json({
+          success: false,
+          message: 'Too many login attempts. Please try again later.'
+        });
+      }
+      
       return res.status(401).json({
         success: false,
         message: 'Invalid email or password'
@@ -492,7 +497,16 @@ class AuthController {
 
     // On invalid password: record failure with the guard and return generic response
     if (!isPasswordValid) {
-      recordBruteForceResult({ success: false }, bfCtx); // record failure (progressive cooldown/lock)
+      const shouldBlock = recordBruteForceResult({ success: false }, bfCtx); // record failure (progressive cooldown/lock)
+      
+      // If this was the 3rd failed attempt from same account+IP, show "too many attempts" message
+      if (shouldBlock) {
+        return res.status(429).json({
+          success: false,
+          message: 'Too many login attempts. Please try again later.'
+        });
+      }
+      
       return res.status(401).json({
         success: false,
         message: 'Invalid email or password'

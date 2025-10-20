@@ -5,8 +5,17 @@ class MarketplaceController {
   // Get all marketplace items (public)
   async getAllItems(req, res) {
     try {
-      const { category, search, limit = 20, offset = 0 } = req.query;
+      let { category, search, limit = 20, offset = 0 } = req.query;
       const db = dbConfig.db;
+      
+      // Sanitize search input to prevent injection
+      if (search) {
+        search = InputSanitizer.sanitizeSearchQuery(search);
+      }
+      
+      // Validate and sanitize numeric inputs
+      limit = InputSanitizer.validateNumber(limit, { min: 1, max: 100, defaultValue: 20 });
+      offset = InputSanitizer.validateNumber(offset, { min: 0, defaultValue: 0 });
       
       let query = `
         SELECT 
@@ -22,6 +31,8 @@ class MarketplaceController {
       let paramIndex = 1;
       
       if (category && category !== 'all') {
+        // Sanitize category input
+        category = InputSanitizer.sanitizeText(category, 50);
         query += ` AND mi.category = $${paramIndex}`;
         queryParams.push(category);
         paramIndex++;
@@ -34,7 +45,7 @@ class MarketplaceController {
       }
       
       query += ` ORDER BY mi.created_at DESC LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`;
-      queryParams.push(parseInt(limit), parseInt(offset));
+      queryParams.push(limit, offset);
       
       const result = await db.query(query, queryParams);
       
@@ -120,9 +131,10 @@ class MarketplaceController {
   async createItem(req, res) {
     try {
       const userId = req.user.userId;
-      const { title, description, price, category, condition, location, tags } = req.body;
+      let { title, description, price, category, condition, location, tags } = req.body;
       const db = dbConfig.db;
       
+      // Validate required fields
       if (!title || !description || !price || !category) {
         return res.status(400).json({
           success: false,
@@ -130,14 +142,24 @@ class MarketplaceController {
         });
       }
       
-      if (price <= 0) {
+      // Sanitize text inputs
+      title = InputSanitizer.sanitizeText(title, 200);
+      description = InputSanitizer.sanitizeText(description, 2000);
+      category = InputSanitizer.sanitizeText(category, 50);
+      if (condition) condition = InputSanitizer.sanitizeText(condition, 50);
+      if (location) location = InputSanitizer.sanitizeText(location, 200);
+      
+      // Validate and sanitize price
+      const validatedPrice = InputSanitizer.validatePrice(price);
+      if (!validatedPrice || validatedPrice <= 0) {
         return res.status(400).json({
           success: false,
-          message: 'Price must be greater than 0'
+          message: 'Invalid price. Price must be a positive number.'
         });
       }
+      price = validatedPrice;
       
-      // Process uploaded images
+      // Process uploaded images with filename sanitization
       let imageUrls = [];
       if (req.files && req.files.length > 0) {
         imageUrls = req.files.map(file => {
@@ -147,14 +169,18 @@ class MarketplaceController {
         });
       }
       
-      // Process tags if provided
+      // Process and sanitize tags if provided
       let tagsArray = [];
       if (tags) {
         try {
           tagsArray = Array.isArray(tags) ? tags : JSON.parse(tags);
+          // Sanitize each tag
+          tagsArray = tagsArray.map(tag => InputSanitizer.sanitizeText(String(tag), 50)).filter(tag => tag);
         } catch (err) {
           // If JSON parsing fails, treat as comma-separated string
-          tagsArray = typeof tags === 'string' ? tags.split(',').map(tag => tag.trim()) : [];
+          if (typeof tags === 'string') {
+            tagsArray = tags.split(',').map(tag => InputSanitizer.sanitizeText(tag.trim(), 50)).filter(tag => tag);
+          }
         }
       }
       
@@ -167,9 +193,9 @@ class MarketplaceController {
       
       const values = [
         userId,
-        title.trim(),
-        description.trim(),
-        parseFloat(price),
+        title,
+        description,
+        price,
         category,
         condition || 'good',
         JSON.stringify(imageUrls),

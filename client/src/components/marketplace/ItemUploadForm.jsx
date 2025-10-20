@@ -147,13 +147,9 @@ const ItemUploadForm = ({ isOpen, onClose, onSuccess, apiEndpoint = '/marketplac
         submitData.append('description', formData.description.trim());
         submitData.append('price', parseFloat(formData.price));
         submitData.append('condition', formData.condition);
-        if (formData.category && formData.category !== 'electronics') {
-          // For secondhand, we might need to map categories differently or use category_id
-          submitData.append('category_id', null); // Will need proper category mapping later
-        }
-        if (formData.description) {
-          submitData.append('terms_conditions', 'Standard terms and conditions apply.');
-        }
+        // Don't append category_id if it's null - let backend handle it
+        // submitData.append('category_id', null) converts to string "null"
+        submitData.append('terms_conditions', 'I agree to sell this item according to the platform terms and conditions.');
       } else {
         // Marketplace API field mapping (original)
         submitData.append('title', formData.title.trim());
@@ -249,15 +245,15 @@ const ItemUploadForm = ({ isOpen, onClose, onSuccess, apiEndpoint = '/marketplac
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 overflow-y-auto">
       <motion.div
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0, scale: 0.95 }}
-        className="bg-white rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden shadow-2xl"
+        className="bg-white rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden shadow-2xl my-8 flex flex-col"
       >
         {/* Header */}
-        <div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white p-6">
+        <div className="flex-shrink-0 bg-gradient-to-r from-blue-600 to-purple-600 text-white p-6">
           <div className="flex items-center justify-between">
             <div>
               <h2 className="text-2xl font-bold">{title}</h2>
@@ -307,7 +303,7 @@ const ItemUploadForm = ({ isOpen, onClose, onSuccess, apiEndpoint = '/marketplac
         </div>
 
         {/* Content */}
-        <div className="p-6 overflow-y-auto max-h-[calc(90vh-200px)]">
+        <div className="flex-1 p-6 overflow-y-auto" style={{ minHeight: 0 }}>
           <AnimatePresence mode="wait">
             {currentStep === 1 && (
               <motion.div
@@ -681,12 +677,12 @@ const ItemUploadForm = ({ isOpen, onClose, onSuccess, apiEndpoint = '/marketplac
         </div>
 
         {/* Footer */}
-        <div className="bg-gray-50 px-6 py-4 flex items-center justify-between">
+        <div className="flex-shrink-0 bg-gray-50 px-6 py-5 border-t border-gray-200 flex items-center justify-between gap-4">
           <div className="flex space-x-3">
             {currentStep > 1 && (
               <button
                 onClick={prevStep}
-                className="px-4 py-2 text-gray-600 hover:text-gray-800 font-medium"
+                className="px-5 py-2.5 text-gray-700 hover:text-gray-900 font-medium transition-colors rounded-lg hover:bg-gray-100"
               >
                 Previous
               </button>
@@ -696,7 +692,7 @@ const ItemUploadForm = ({ isOpen, onClose, onSuccess, apiEndpoint = '/marketplac
           <div className="flex space-x-3">
             <button
               onClick={handleClose}
-              className="px-4 py-2 text-gray-600 hover:text-gray-800 font-medium"
+              className="px-5 py-2.5 text-gray-700 hover:text-gray-900 font-medium border border-gray-300 rounded-lg hover:bg-gray-100 transition-colors"
             >
               Cancel
             </button>
@@ -705,7 +701,7 @@ const ItemUploadForm = ({ isOpen, onClose, onSuccess, apiEndpoint = '/marketplac
               <button
                 onClick={nextStep}
                 disabled={!canProceedFromStep(currentStep)}
-                className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+                className="px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors shadow-sm hover:shadow-md"
               >
                 Next
               </button>
@@ -713,7 +709,7 @@ const ItemUploadForm = ({ isOpen, onClose, onSuccess, apiEndpoint = '/marketplac
               <button
                 onClick={handleSubmit}
                 disabled={isUploading}
-                className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium flex items-center"
+                className="px-6 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium flex items-center transition-colors shadow-sm hover:shadow-md"
               >
                 {isUploading ? (
                   <>

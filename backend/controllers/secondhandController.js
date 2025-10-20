@@ -1,4 +1,5 @@
 const dbConfig = require('../config/db');
+const InputSanitizer = require('../utils/inputSanitization');
 
 // Map DB row to frontend-friendly object
 function mapItem(row) {
@@ -111,10 +112,23 @@ const getSecondhandItemById = async (req, res) => {
 
 const createSecondhandItem = async (req, res) => {
   try {
-    const userId = req.user.userId;
-    const { item_name, description, price, condition, category_id, terms_conditions } = req.body;
+    const userId = req.user?.userId;
+    
+    // Check if user is authenticated
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: 'Authentication required'
+      });
+    }
+
+    let { item_name, description, price, condition, category_id, terms_conditions } = req.body;
+    
+    console.log('Creating secondhand item:', { item_name, description, price, condition, userId });
+    
     const db = dbConfig.getDB();
     
+    // Validate required fields
     if (!item_name || !description || !price) {
       return res.status(400).json({
         success: false,
@@ -122,14 +136,23 @@ const createSecondhandItem = async (req, res) => {
       });
     }
 
-    if (price <= 0) {
+    // Sanitize text inputs
+    item_name = InputSanitizer.sanitizeText(item_name, 200);
+    description = InputSanitizer.sanitizeText(description, 2000);
+    if (condition) condition = InputSanitizer.sanitizeText(condition, 50);
+    if (terms_conditions) terms_conditions = InputSanitizer.sanitizeText(terms_conditions, 500);
+
+    // Validate and sanitize price
+    const validatedPrice = InputSanitizer.validatePrice(price);
+    if (!validatedPrice || validatedPrice <= 0) {
       return res.status(400).json({
         success: false,
-        message: 'Price must be greater than 0'
+        message: 'Invalid price. Price must be a positive number.'
       });
     }
+    price = validatedPrice;
 
-    // Process uploaded images
+    // Process uploaded images with filename sanitization
     let imageUrls = [];
     if (req.files && req.files.length > 0) {
       imageUrls = req.files.map(file => {
@@ -158,9 +181,9 @@ const createSecondhandItem = async (req, res) => {
 
     const values = [
       userId,
-      item_name.trim(),
-      description.trim(),
-      parseFloat(price),
+      item_name,
+      description,
+      price,
       condition || 'good',
       category_id || null,
       terms_conditions || null,
@@ -168,6 +191,8 @@ const createSecondhandItem = async (req, res) => {
     ];
 
     const result = await db.query(query, values);
+    
+    console.log('Secondhand item created successfully:', result.rows[0].item_id);
     
     res.status(201).json({
       success: true,
@@ -223,11 +248,15 @@ const getUserSecondhandItems = async (req, res) => {
 
 const searchSecondhandItems = async (req, res) => {
   try {
-    const { q } = req.query;
+    let { q } = req.query;
     const db = dbConfig.getDB();
     if (!q) {
       return res.json({ success: true, data: [] });
     }
+    
+    // Sanitize search query
+    q = InputSanitizer.sanitizeSearchQuery(q);
+    
     const result = await db.query(
       `SELECT si.*, u.full_name as seller_name
        FROM secondhand_items si

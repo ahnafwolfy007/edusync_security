@@ -102,46 +102,62 @@ class InputSanitizer {
 
     /**
      * Sanitize general text input
+     * Removes ALL HTML tags and dangerous patterns
      */
     static sanitizeText(input, maxLength = 1000) {
         if (typeof input !== 'string') return '';
         
-        return input
-            // Remove dangerous HTML tags and attributes
-            .replace(/<script[^>]*>.*?<\/script>/gi, '')
-            .replace(/<iframe[^>]*>.*?<\/iframe>/gi, '')
-            .replace(/<object[^>]*>.*?<\/object>/gi, '')
-            .replace(/<embed[^>]*>.*?<\/embed>/gi, '')
+        // First, use sanitizeHTML to remove all HTML tags and encode special chars
+        let sanitized = this.sanitizeHTML(input);
+        
+        // Then apply additional sanitization for extra security
+        sanitized = sanitized
             .replace(/javascript:/gi, '')
             .replace(/vbscript:/gi, '')
             .replace(/data:/gi, '')
-            // Remove event handlers
             .replace(/on\w+\s*=\s*["'][^"']*["']/gi, '')
             .replace(/on\w+\s*=\s*[^"'\s>]+/gi, '')
             // Limit length and trim
             .slice(0, maxLength)
             .trim();
+        
+        return sanitized;
     }
 
     /**
      * Validate numeric input with range checking
+     * Can be called with (input, min, max) OR (input, {min, max, defaultValue})
      */
-    static validateNumber(input, min = null, max = null) {
-        const num = Number(input);
+    static validateNumber(input, minOrOptions = null, max = null) {
+        // Handle object format: {min, max, defaultValue}
+        let min = null;
+        let defaultValue = null;
         
-        if (isNaN(num) || !isFinite(num)) {
-            return { valid: false, value: null, error: 'Invalid number format' };
+        if (typeof minOrOptions === 'object' && minOrOptions !== null) {
+            min = minOrOptions.min !== undefined ? minOrOptions.min : null;
+            max = minOrOptions.max !== undefined ? minOrOptions.max : null;
+            defaultValue = minOrOptions.defaultValue !== undefined ? minOrOptions.defaultValue : null;
+        } else {
+            min = minOrOptions;
         }
         
+        const num = Number(input);
+        
+        // If invalid and we have a default, return default
+        if (isNaN(num) || !isFinite(num)) {
+            return defaultValue !== null ? defaultValue : null;
+        }
+        
+        // Range checking
         if (min !== null && num < min) {
-            return { valid: false, value: null, error: `Number must be at least ${min}` };
+            return defaultValue !== null ? defaultValue : min;
         }
         
         if (max !== null && num > max) {
-            return { valid: false, value: null, error: `Number must be at most ${max}` };
+            return defaultValue !== null ? defaultValue : max;
         }
         
-        return { valid: true, value: num, error: null };
+        return num;
     }
 
     /**
