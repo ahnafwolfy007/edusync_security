@@ -35,14 +35,21 @@ class Database {
       client.release();
       // Set the db property to the pool when connection is successful
       this.db = this.pool;
+      // Set the db property to the pool when connection is successful
+      this.db = this.pool;
       return true;
     } catch (error) {
       if (error.code === '28P01') {
+        console.error('⚠️ Database authentication failed - continuing with mock data');
         console.error('❌ Authentication failed: Check DB_USER/DB_PASSWORD in .env (user=' + (process.env.DB_USER||'postgres') + ')');
       } else {
         console.error('⚠️ Database connection failed - continuing with mock data');
+        console.error('⚠️ Database connection failed - continuing with mock data');
         console.error('❌ Database connection failed:', error.message);
       }
+      // Don't throw error, allow app to continue with mock data
+      this.db = null;
+      return false;
       // Don't throw error, allow app to continue with mock data
       this.db = null;
       return false;
@@ -64,6 +71,8 @@ class Database {
       }
     } catch (error) {
       console.error('❌ Database initialization failed:', error);
+      console.log('⚠️ Continuing without database connection - using mock data');
+      this.db = null;
       console.log('⚠️ Continuing without database connection - using mock data');
       this.db = null;
     }
@@ -116,6 +125,15 @@ class Database {
   // Ensure email verification fields
   await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS is_email_verified BOOLEAN DEFAULT FALSE`);
   await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified_at TIMESTAMP`);
+  // Ensure user activity tracking columns
+  await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS login_count INTEGER DEFAULT 0`);
+  await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login TIMESTAMP`);
+  // Ensure account status flags
+  await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE`);
+  await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS is_blocked BOOLEAN DEFAULT FALSE`);
+  // Backfill nulls for legacy rows
+  try { await client.query(`UPDATE users SET is_active = TRUE WHERE is_active IS NULL`); } catch(e) {}
+  try { await client.query(`UPDATE users SET is_blocked = FALSE WHERE is_blocked IS NULL`); } catch(e) {}
 
       // Create BUSINESS_APPLICATIONS table
       await client.query(`
@@ -520,6 +538,20 @@ class Database {
   // Migration safety: adjust email_verification_tokens silently (ignore failures)
   try { await client.query(`ALTER TABLE email_verification_tokens ALTER COLUMN user_id DROP NOT NULL`); } catch(e) {}
   // (Removed duplicate unique constraint migration to avoid transaction abort)
+
+      // Admin Login OTP table for 2FA
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS admin_login_otps (
+          otp_id SERIAL PRIMARY KEY,
+          user_id INT NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+          email VARCHAR(150) NOT NULL,
+          otp_code VARCHAR(10) NOT NULL,
+          session_token VARCHAR(500) NOT NULL,
+          expires_at TIMESTAMP NOT NULL,
+          used BOOLEAN DEFAULT FALSE,
+          created_at TIMESTAMP DEFAULT NOW()
+        )
+      `);
 
       /* FREE MARKETPLACE FAVORITES table moved below after free_marketplace_items definition */
 
