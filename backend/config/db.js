@@ -4,7 +4,7 @@ const { Pool } = require('pg');
 class Database {
   constructor() {
     // Defensive: show which env vars are present (sanitized)
-    const missing = ['DB_HOST','DB_PORT','DB_NAME','DB_USER','DB_PASSWORD'].filter(k => !process.env[k]);
+    const missing = ['DB_HOST', 'DB_PORT', 'DB_NAME', 'DB_USER', 'DB_PASSWORD'].filter(k => !process.env[k]);
     if (missing.length) {
       console.warn('⚠️ Missing DB env vars:', missing.join(', '));
     }
@@ -39,7 +39,7 @@ class Database {
     } catch (error) {
       if (error.code === '28P01') {
         console.error('⚠️ Database authentication failed - continuing with mock data');
-        console.error('❌ Authentication failed: Check DB_USER/DB_PASSWORD in .env (user=' + (process.env.DB_USER||'postgres') + ')');
+        console.error('❌ Authentication failed: Check DB_USER/DB_PASSWORD in .env (user=' + (process.env.DB_USER || 'postgres') + ')');
       } else {
         console.error('⚠️ Database connection failed - continuing with mock data');
         console.error('❌ Database connection failed:', error.message);
@@ -73,12 +73,12 @@ class Database {
   // Create all necessary tables based on the complete schema
   async createTables() {
     const client = await this.pool.connect();
-    
+
     try {
       // Lightweight migration logger (no manual transaction to avoid COMMIT/ROLLBACK errors)
       const originalQuery = client.query.bind(client);
       client.query = async (text, params) => {
-        const preview = (text || '').toString().split('\n').map(l=>l.trim()).filter(Boolean)[0];
+        const preview = (text || '').toString().split('\n').map(l => l.trim()).filter(Boolean)[0];
         if (preview) console.log('[MIGRATION]', preview);
         try {
           return await originalQuery(text, params);
@@ -112,14 +112,14 @@ class Database {
         )
       `);
 
-  // Ensure profile picture column exists for user avatars
-  await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_picture TEXT`);
-  // Ensure email verification fields
-  await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS is_email_verified BOOLEAN DEFAULT FALSE`);
-  await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified_at TIMESTAMP`);
-  // Ensure user activity tracking columns
-  await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS login_count INTEGER DEFAULT 0`);
-  await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login TIMESTAMP`);
+      // Ensure profile picture column exists for user avatars
+      await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_picture TEXT`);
+      // Ensure email verification fields
+      await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS is_email_verified BOOLEAN DEFAULT FALSE`);
+      await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified_at TIMESTAMP`);
+      // Ensure user activity tracking columns
+      await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS login_count INTEGER DEFAULT 0`);
+      await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login TIMESTAMP`);
 
       // Create BUSINESS_APPLICATIONS table
       await client.query(`
@@ -150,8 +150,8 @@ class Database {
         )
       `);
 
-  // Ensure optional branding/image column exists
-  await client.query(`ALTER TABLE businesses ADD COLUMN IF NOT EXISTS image TEXT`);
+      // Ensure optional branding/image column exists
+      await client.query(`ALTER TABLE businesses ADD COLUMN IF NOT EXISTS image TEXT`);
 
       // Create BUSINESS_PRODUCTS table
       await client.query(`
@@ -169,9 +169,9 @@ class Database {
         )
       `);
 
-  // Ensure category & image columns for filtering / UI
-  await client.query(`ALTER TABLE business_products ADD COLUMN IF NOT EXISTS category VARCHAR(100)`);
-  await client.query(`ALTER TABLE business_products ADD COLUMN IF NOT EXISTS image TEXT`);
+      // Ensure category & image columns for filtering / UI
+      await client.query(`ALTER TABLE business_products ADD COLUMN IF NOT EXISTS category VARCHAR(100)`);
+      await client.query(`ALTER TABLE business_products ADD COLUMN IF NOT EXISTS image TEXT`);
 
       // Create BUSINESS_ORDERS table
       await client.query(`
@@ -186,14 +186,14 @@ class Database {
         )
       `);
 
-    // Ensure newer expected columns exist on business_orders
-    await client.query(`ALTER TABLE business_orders ADD COLUMN IF NOT EXISTS total_amount DECIMAL(12,2) DEFAULT 0`);
-    await client.query(`ALTER TABLE business_orders ADD COLUMN IF NOT EXISTS delivery_address TEXT`);
-    await client.query(`ALTER TABLE business_orders ADD COLUMN IF NOT EXISTS special_instructions TEXT`);
-    await client.query(`ALTER TABLE business_orders ADD COLUMN IF NOT EXISTS payment_status VARCHAR(20) DEFAULT 'pending'`);
-    await client.query(`ALTER TABLE business_orders ADD COLUMN IF NOT EXISTS rating INT`);
-    await client.query(`ALTER TABLE business_orders ADD COLUMN IF NOT EXISTS review TEXT`);
-    await client.query(`ALTER TABLE business_orders ADD COLUMN IF NOT EXISTS reviewed_at TIMESTAMP`);
+      // Ensure newer expected columns exist on business_orders
+      await client.query(`ALTER TABLE business_orders ADD COLUMN IF NOT EXISTS total_amount DECIMAL(12,2) DEFAULT 0`);
+      await client.query(`ALTER TABLE business_orders ADD COLUMN IF NOT EXISTS delivery_address TEXT`);
+      await client.query(`ALTER TABLE business_orders ADD COLUMN IF NOT EXISTS special_instructions TEXT`);
+      await client.query(`ALTER TABLE business_orders ADD COLUMN IF NOT EXISTS payment_status VARCHAR(20) DEFAULT 'pending'`);
+      await client.query(`ALTER TABLE business_orders ADD COLUMN IF NOT EXISTS rating INT`);
+      await client.query(`ALTER TABLE business_orders ADD COLUMN IF NOT EXISTS review TEXT`);
+      await client.query(`ALTER TABLE business_orders ADD COLUMN IF NOT EXISTS reviewed_at TIMESTAMP`);
 
       // Create BUSINESS_ORDER_ITEMS table
       await client.query(`
@@ -205,9 +205,9 @@ class Database {
         )
       `);
 
-    // Ensure newer expected columns exist on business_order_items
-    await client.query(`ALTER TABLE business_order_items ADD COLUMN IF NOT EXISTS price DECIMAL(12,2)`);
-    await client.query(`ALTER TABLE business_order_items ADD COLUMN IF NOT EXISTS terms_accepted BOOLEAN DEFAULT FALSE`);
+      // Ensure newer expected columns exist on business_order_items
+      await client.query(`ALTER TABLE business_order_items ADD COLUMN IF NOT EXISTS price DECIMAL(12,2)`);
+      await client.query(`ALTER TABLE business_order_items ADD COLUMN IF NOT EXISTS terms_accepted BOOLEAN DEFAULT FALSE`);
 
       // Create CATEGORIES table
       await client.query(`
@@ -216,8 +216,8 @@ class Database {
       category_name VARCHAR(100) UNIQUE NOT NULL
         )
       `);
-    // Ensure category_type column exists (seed uses it)
-    await client.query(`ALTER TABLE categories ADD COLUMN IF NOT EXISTS category_type VARCHAR(50)`);
+      // Ensure category_type column exists (seed uses it)
+      await client.query(`ALTER TABLE categories ADD COLUMN IF NOT EXISTS category_type VARCHAR(50)`);
 
       // Create SECONDHAND_ITEMS table
       await client.query(`
@@ -359,14 +359,14 @@ class Database {
         )
       `);
 
-    // Add missing columns if legacy rows exist
-    await client.query(`ALTER TABLE food_orders ADD COLUMN IF NOT EXISTS total_amount DECIMAL(12,2) DEFAULT 0`);
-    await client.query(`ALTER TABLE food_orders ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT NOW()`);
-    await client.query(`ALTER TABLE food_orders ADD COLUMN IF NOT EXISTS rating INT`);
-    await client.query(`ALTER TABLE food_orders ADD COLUMN IF NOT EXISTS review TEXT`);
-    await client.query(`ALTER TABLE food_orders ADD COLUMN IF NOT EXISTS reviewed_at TIMESTAMP`);
-    await client.query(`ALTER TABLE food_orders ADD COLUMN IF NOT EXISTS estimated_delivery_time TIMESTAMP`);
-    await client.query(`ALTER TABLE food_orders ADD COLUMN IF NOT EXISTS delivered_at TIMESTAMP`);
+      // Add missing columns if legacy rows exist
+      await client.query(`ALTER TABLE food_orders ADD COLUMN IF NOT EXISTS total_amount DECIMAL(12,2) DEFAULT 0`);
+      await client.query(`ALTER TABLE food_orders ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT NOW()`);
+      await client.query(`ALTER TABLE food_orders ADD COLUMN IF NOT EXISTS rating INT`);
+      await client.query(`ALTER TABLE food_orders ADD COLUMN IF NOT EXISTS review TEXT`);
+      await client.query(`ALTER TABLE food_orders ADD COLUMN IF NOT EXISTS reviewed_at TIMESTAMP`);
+      await client.query(`ALTER TABLE food_orders ADD COLUMN IF NOT EXISTS estimated_delivery_time TIMESTAMP`);
+      await client.query(`ALTER TABLE food_orders ADD COLUMN IF NOT EXISTS delivered_at TIMESTAMP`);
 
       // Create FOOD_ORDER_ITEMS table
       await client.query(`
@@ -418,13 +418,13 @@ class Database {
         )
       `);
 
-  // Ensure newer expected columns exist on transactions to match wallet controller
-  await client.query(`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS user_id INT REFERENCES users(user_id)`);
-  await client.query(`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS type VARCHAR(50)`);
-  await client.query(`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS payment_method VARCHAR(50)`);
-  await client.query(`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS reference_number VARCHAR(100)`);
-  await client.query(`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS metadata JSONB`);
-  await client.query(`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW()`);
+      // Ensure newer expected columns exist on transactions to match wallet controller
+      await client.query(`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS user_id INT REFERENCES users(user_id)`);
+      await client.query(`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS type VARCHAR(50)`);
+      await client.query(`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS payment_method VARCHAR(50)`);
+      await client.query(`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS reference_number VARCHAR(100)`);
+      await client.query(`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS metadata JSONB`);
+      await client.query(`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW()`);
 
       // Create LOST_FOUND_ITEMS table
       await client.query(`
@@ -511,9 +511,9 @@ class Database {
         )
       `);
 
-  // Migration safety: adjust email_verification_tokens silently (ignore failures)
-  try { await client.query(`ALTER TABLE email_verification_tokens ALTER COLUMN user_id DROP NOT NULL`); } catch(e) {}
-  // (Removed duplicate unique constraint migration to avoid transaction abort)
+      // Migration safety: adjust email_verification_tokens silently (ignore failures)
+      try { await client.query(`ALTER TABLE email_verification_tokens ALTER COLUMN user_id DROP NOT NULL`); } catch (e) { }
+      // (Removed duplicate unique constraint migration to avoid transaction abort)
 
       // Admin Login OTP table for 2FA
       await client.query(`
@@ -529,9 +529,9 @@ class Database {
         )
       `);
 
-  /* FREE MARKETPLACE FAVORITES table moved below after free_marketplace_items definition */
+      /* FREE MARKETPLACE FAVORITES table moved below after free_marketplace_items definition */
 
-  // Free Marketplace core tables (ensure created before favorites)
+      // Free Marketplace core tables (ensure created before favorites)
       await client.query(`
         CREATE TABLE IF NOT EXISTS free_marketplace_items (
           item_id SERIAL PRIMARY KEY,
@@ -672,10 +672,49 @@ class Database {
         )
       `);
 
-  console.log('✅ All tables ensured successfully');
+      await client.query(`CREATE TABLE IF NOT EXISTS session_tokens (
+  session_id BIGSERIAL PRIMARY KEY,
+  user_id INT NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+  token TEXT UNIQUE NOT NULL,
+  user_agent TEXT,
+  ip_address TEXT,
+  is_active BOOLEAN DEFAULT TRUE,
+  created_at TIMESTAMP DEFAULT NOW(),
+  expires_at TIMESTAMP NOT NULL);
+    `);
+
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_session_tokens_user_active
+  ON session_tokens(user_id, is_active);
+      `)
+
+
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS idempotency_keys (
+  id SERIAL PRIMARY KEY,
+  key TEXT UNIQUE NOT NULL,
+  user_id INT REFERENCES users(user_id),
+  method VARCHAR(10) NOT NULL,
+  path TEXT NOT NULL,
+  request_hash TEXT,
+  status_code INT,
+  response_body JSONB,
+  created_at TIMESTAMP DEFAULT NOW(),
+  expires_at TIMESTAMP NOT NULL
+);
+        `)
+
+
+        await client.query(`
+          CREATE INDEX IF NOT EXISTS idx_idempotency_expires
+  ON idempotency_keys(expires_at);
+          `)
+
+
+      console.log('✅ All tables ensured successfully');
     } catch (error) {
-  // Do not rethrow to avoid crashing server; migrations are best-effort
-  console.error('❌ Error ensuring tables (continuing in degraded mode):', error.message);
+      // Do not rethrow to avoid crashing server; migrations are best-effort
+      console.error('❌ Error ensuring tables (continuing in degraded mode):', error.message);
     } finally {
       client.release();
     }
@@ -703,7 +742,7 @@ class Database {
     const values = Object.values(data);
     const placeholders = keys.map((_, index) => `$${index + 1}`).join(', ');
     const columns = keys.join(', ');
-    
+
     const query = `INSERT INTO ${table} (${columns}) VALUES (${placeholders}) RETURNING *`;
     const result = await this.query(query, values);
     return result.rows[0];
@@ -756,7 +795,7 @@ class Database {
     const keys = Object.keys(data);
     const values = Object.values(data);
     const setClause = keys.map((key, index) => `${key} = $${index + 2}`).join(', ');
-    
+
     const query = `UPDATE ${table} SET ${setClause}, updated_at = CURRENT_TIMESTAMP WHERE ${idColumn} = $1 RETURNING *`;
     const result = await this.query(query, [id, ...values]);
     return result.rows[0];
@@ -832,10 +871,10 @@ const dbConfig = {
   database: process.env.DB_NAME || 'edusync',
   username: process.env.DB_USER || 'postgres',
   password: process.env.DB_PASSWORD || 'your_postgres_password',
-  
+
   // Database instance
   db: null,
-  
+
   // Initialize database
   init: async () => {
     try {
@@ -847,7 +886,7 @@ const dbConfig = {
       throw error;
     }
   },
-  
+
   // Get database instance
   getDB: () => {
     if (!dbConfig.db) {
@@ -855,7 +894,7 @@ const dbConfig = {
     }
     return dbConfig.db;
   },
-  
+
   // Close database connection
   close: async () => {
     try {
