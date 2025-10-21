@@ -324,6 +324,7 @@ export const AuthProvider = ({ children }) => {
     isModerator,
     isBusinessOwner,
     verifyAdminOtp,
+    verifyAdminOtp,
     sessionManager, // Expose session manager for debugging
     getActiveSessions: () => sessionManager.getActiveSessions(),
     switchToSession: (port) => sessionManager.switchToSession(port)

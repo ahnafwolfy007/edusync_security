@@ -631,9 +631,262 @@ const AdminPanel = () => {
     );
   };
 
+  // User Details Modal Component
+  const UserModal = ({ user, isOpen, onClose }) => {
+    if (!isOpen || !user) return null;
+
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+          <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+            <h3 className="text-lg font-medium text-gray-900">User Details</h3>
+            <button
+              onClick={onClose}
+              className="text-gray-400 hover:text-gray-600"
+            >
+              <FiX className="w-6 h-6" />
+            </button>
+          </div>
+          
+          <div className="p-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Basic Information */}
+              <div className="space-y-4">
+                <h4 className="text-lg font-medium text-gray-900 mb-4">Basic Information</h4>
+                
+                <div className="flex items-center space-x-4">
+                  <div className="w-16 h-16 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white font-medium text-xl">
+                    {user.full_name?.charAt(0) || user.email?.charAt(0)}
+                  </div>
+                  <div>
+                    <h5 className="text-xl font-semibold text-gray-900">{user.full_name || 'No Name'}</h5>
+                    <p className="text-gray-600">{user.email}</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Phone</label>
+                    <div className="flex items-center mt-1">
+                      <FiPhone className="w-4 h-4 text-gray-400 mr-2" />
+                      <span className="text-sm text-gray-900">{user.phone || 'Not provided'}</span>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Role</label>
+                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 mt-1">
+                      {user.role_name || user.role || 'User'}
+                    </span>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Institution</label>
+                    <div className="flex items-center mt-1">
+                      <FiBook className="w-4 h-4 text-gray-400 mr-2" />
+                      <span className="text-sm text-gray-900">{user.institution || 'Not provided'}</span>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">Location</label>
+                    <div className="flex items-center mt-1">
+                      <FiMapPin className="w-4 h-4 text-gray-400 mr-2" />
+                      <span className="text-sm text-gray-900">{user.location || 'Not provided'}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Member Since</label>
+                  <div className="flex items-center mt-1">
+                    <FiCalendar className="w-4 h-4 text-gray-400 mr-2" />
+                    <span className="text-sm text-gray-900">
+                      {new Date(user.created_at).toLocaleDateString('en-US', {
+                        year: 'numeric',
+                        month: 'long',
+                        day: 'numeric'
+                      })}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Activity & Statistics */}
+              <div className="space-y-4">
+                <h4 className="text-lg font-medium text-gray-900 mb-4">Activity & Statistics</h4>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="bg-blue-50 p-4 rounded-lg">
+                    <div className="flex items-center">
+                      <FiLogIn className="w-8 h-8 text-blue-600 mr-3" />
+                      <div>
+                        <p className="text-sm font-medium text-gray-600">Total Logins</p>
+                        <p className="text-2xl font-bold text-blue-600">{user.login_count || 0}</p>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="bg-green-50 p-4 rounded-lg">
+                    <div className="flex items-center">
+                      <FiTrendingUp className="w-8 h-8 text-green-600 mr-3" />
+                      <div>
+                        <p className="text-sm font-medium text-gray-600">Total Purchases</p>
+                        <p className="text-2xl font-bold text-green-600">{user.total_purchases || 0}</p>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="bg-purple-50 p-4 rounded-lg">
+                    <div className="flex items-center">
+                      <FiDollarSign className="w-8 h-8 text-purple-600 mr-3" />
+                      <div>
+                        <p className="text-sm font-medium text-gray-600">Total Sales</p>
+                        <p className="text-2xl font-bold text-purple-600">{user.total_sales || 0}</p>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="bg-orange-50 p-4 rounded-lg">
+                    <div className="flex items-center">
+                      <FiActivity className="w-8 h-8 text-orange-600 mr-3" />
+                      <div>
+                        <p className="text-sm font-medium text-gray-600">Last Login</p>
+                        <p className="text-sm font-bold text-orange-600">
+                          {user.last_login ? new Date(user.last_login).toLocaleDateString() : 'Never'}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-gray-50 p-4 rounded-lg">
+                  <h5 className="font-medium text-gray-900 mb-2">Account Status</h5>
+                  <div className="flex items-center space-x-4">
+                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                      user.is_active 
+                        ? 'bg-green-100 text-green-800' 
+                        : 'bg-red-100 text-red-800'
+                    }`}>
+                      {user.is_active ? 'Active' : 'Inactive'}
+                    </span>
+                    {user.email_verified && (
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                        <FiUserCheck className="w-3 h-3 mr-1" />
+                        Email Verified
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   const UsersTab = () => {
     return (
       <div className="space-y-6">
+        {/* User Analytics Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="bg-white rounded-lg shadow p-6">
+            <div className="flex items-center">
+              <div className="flex-shrink-0">
+                <FiUsers className="h-8 w-8 text-blue-600" />
+              </div>
+              <div className="ml-4">
+                <p className="text-sm font-medium text-gray-600">Total Users</p>
+                <p className="text-2xl font-bold text-gray-900">{userAnalytics.totalUsers || 0}</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-lg shadow p-6">
+            <div className="flex items-center">
+              <div className="flex-shrink-0">
+                <FiUserCheck className="h-8 w-8 text-green-600" />
+              </div>
+              <div className="ml-4">
+                <p className="text-sm font-medium text-gray-600">Active Users</p>
+                <p className="text-2xl font-bold text-gray-900">{userAnalytics.activeUsers || 0}</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-lg shadow p-6">
+            <div className="flex items-center">
+              <div className="flex-shrink-0">
+                <FiCalendar className="h-8 w-8 text-purple-600" />
+              </div>
+              <div className="ml-4">
+                <p className="text-sm font-medium text-gray-600">New This Month</p>
+                <p className="text-2xl font-bold text-gray-900">{userAnalytics.recentSignups || 0}</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-lg shadow p-6">
+            <div className="flex items-center">
+              <div className="flex-shrink-0">
+                <FiActivity className="h-8 w-8 text-orange-600" />
+              </div>
+              <div className="ml-4">
+                <p className="text-sm font-medium text-gray-600">Total Logins</p>
+                <p className="text-2xl font-bold text-gray-900">{userAnalytics.totalLogins || 0}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Role Distribution Analytics */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="bg-white rounded-lg shadow p-6">
+            <h3 className="text-lg font-medium text-gray-900 mb-4">Role Distribution</h3>
+            <div className="space-y-3">
+              {Object.entries(userAnalytics.roleDistribution || {}).map(([role, count]) => (
+                <div key={role} className="flex items-center justify-between">
+                  <span className="text-sm font-medium text-gray-600 capitalize">
+                    {role.replace('_', ' ')}
+                  </span>
+                  <div className="flex items-center space-x-2">
+                    <div className="w-20 bg-gray-200 rounded-full h-2">
+                      <div 
+                        className="bg-blue-600 h-2 rounded-full" 
+                        style={{ width: `${(count / userAnalytics.totalUsers) * 100}%` }}
+                      ></div>
+                    </div>
+                    <span className="text-sm font-bold text-gray-900">{count}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="bg-white rounded-lg shadow p-6">
+            <h3 className="text-lg font-medium text-gray-900 mb-4">Top Institutions</h3>
+            <div className="space-y-3">
+              {Object.entries(userAnalytics.institutionDistribution || {})
+                .sort(([,a], [,b]) => b - a)
+                .slice(0, 5)
+                .map(([institution, count]) => (
+                <div key={institution} className="flex items-center justify-between">
+                  <span className="text-sm font-medium text-gray-600 truncate">
+                    {institution}
+                  </span>
+                  <div className="flex items-center space-x-2">
+                    <div className="w-16 bg-gray-200 rounded-full h-2">
+                      <div 
+                        className="bg-green-600 h-2 rounded-full" 
+                        style={{ width: `${(count / userAnalytics.totalUsers) * 100}%` }}
+                      ></div>
+                    </div>
+                    <span className="text-sm font-bold text-gray-900">{count}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
         {/* User Analytics Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           <div className="bg-white rounded-lg shadow p-6">
@@ -754,8 +1007,8 @@ const AdminPanel = () => {
                 <input
                   type="text"
                   placeholder="Search users..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
+                  value={localSearchTerm}
+                  onChange={(e) => setLocalSearchTerm(e.target.value)}
                   className="form-input w-full pl-10"
                 />
               </div>
@@ -852,7 +1105,9 @@ const AdminPanel = () => {
                         <div className="flex space-x-2">
                           <button
                             onClick={() => handleViewUser(user.id)}
+                            onClick={() => handleViewUser(user.id)}
                             className="text-blue-600 hover:text-blue-900"
+                            title="View Details"
                             title="View Details"
                           >
                             <FiEye className="w-4 h-4" />

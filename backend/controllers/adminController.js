@@ -371,7 +371,16 @@ class AdminController {
       const { page = 1, limit = 20, role, search } = req.query;
       const offset = (page - 1) * limit;
       
+      
       const db = dbConfig.db;
+      
+      // If database is not available, return error instead of mock data
+      if (!db) {
+        return res.status(500).json({
+          success: false,
+          message: 'Database connection not available'
+        });
+      }
       
       // If database is not available, return error instead of mock data
       if (!db) {
@@ -396,6 +405,10 @@ class AdminController {
           u.is_active,
           u.is_blocked,
           r.role_name,
+          COALESCE(u.login_count, 0) as login_count,
+          u.last_login,
+          0 as total_purchases,
+          0 as total_sales
           COALESCE(u.login_count, 0) as login_count,
           u.last_login,
           0 as total_purchases,
@@ -558,12 +571,36 @@ class AdminController {
         });
       }
       
+      
+      // If database is not available, return mock data for testing
+      if (!dbConfig.db) {
+        console.log('⚠️ Database not available, returning mock user data');
+        const mockUsers = require('../mock-users');
+        const user = mockUsers.find(u => u.user_id === parseInt(id));
+        
+        if (!user) {
+          return res.status(404).json({
+            success: false,
+            message: 'User not found'
+          });
+        }
+        
+        return res.json({
+          success: true,
+          data: user
+        });
+      }
+      
       const db = dbConfig.db;
       
       const query = `
         SELECT 
           u.*,
           r.role_name,
+          COALESCE(u.login_count, 0) as login_count,
+          u.last_login,
+          0 as total_purchases,
+          0 as total_sales
           COALESCE(u.login_count, 0) as login_count,
           u.last_login,
           0 as total_purchases,

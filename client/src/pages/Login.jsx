@@ -10,6 +10,7 @@ const Login = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { login, verifyAdminOtp } = useAuth();
+  const { login, verifyAdminOtp } = useAuth();
   const { showSuccess, showError } = useNotification();
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -19,6 +20,12 @@ const Login = () => {
     password: '',
     rememberMe: false
   });
+  
+  // Admin 2FA state
+  const [adminOtpRequired, setAdminOtpRequired] = useState(false);
+  const [adminTempToken, setAdminTempToken] = useState('');
+  const [adminOtp, setAdminOtp] = useState('');
+  const [verifyingAdminOtp, setVerifyingAdminOtp] = useState(false);
   
   // Admin 2FA state
   const [adminOtpRequired, setAdminOtpRequired] = useState(false);
@@ -82,6 +89,12 @@ const Login = () => {
         setAdminTempToken(result.tempToken);
         showSuccess(result.message);
       } else if (result?.success) {
+      if (result?.success && result?.requiresOtp) {
+        // Admin requires 2FA
+        setAdminOtpRequired(true);
+        setAdminTempToken(result.tempToken);
+        showSuccess(result.message);
+      } else if (result?.success) {
         showSuccess('Welcome back!');
         navigate(from, { replace: true });
       } else {
@@ -92,6 +105,31 @@ const Login = () => {
       showError(error.response?.data?.message || 'Login failed. Please try again.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleAdminOtpSubmit = async (e) => {
+    e.preventDefault();
+    
+    if (!adminOtp || adminOtp.length !== 6) {
+      showError('Please enter the 6-digit OTP code');
+      return;
+    }
+
+    setVerifyingAdminOtp(true);
+    try {
+      const result = await verifyAdminOtp(adminTempToken, adminOtp);
+      if (result?.success) {
+        showSuccess('Admin login successful!');
+        navigate(from, { replace: true });
+      } else {
+        showError(result?.message || 'Invalid OTP code');
+      }
+    } catch (error) {
+      console.error('Admin OTP verification error:', error);
+      showError(error.response?.data?.message || 'OTP verification failed. Please try again.');
+    } finally {
+      setVerifyingAdminOtp(false);
     }
   };
 
@@ -516,6 +554,24 @@ const Login = () => {
                       Remember me 💭
                     </label>
                   </motion.div>
+                {/* Remember Me & Forgot Password */}
+                <div className="flex items-center justify-between">
+                  <motion.div 
+                    whileHover={{ scale: 1.05 }}
+                    className="flex items-center"
+                  >
+                    <input
+                      id="rememberMe"
+                      name="rememberMe"
+                      type="checkbox"
+                      checked={formData.rememberMe}
+                      onChange={handleChange}
+                      className="h-4 w-4 text-cyan-400 focus:ring-cyan-400 border-purple-300 rounded bg-white/10"
+                    />
+                    <label htmlFor="rememberMe" className="ml-3 block text-sm text-purple-200">
+                      Remember me 💭
+                    </label>
+                  </motion.div>
 
                   <motion.div
                     whileHover={{ scale: 1.05 }}
@@ -528,7 +584,49 @@ const Login = () => {
                     </Link>
                   </motion.div>
                 </div>
+                  <motion.div
+                    whileHover={{ scale: 1.05 }}
+                  >
+                    <Link
+                      to="/forgot-password"
+                      className="text-sm font-semibold text-cyan-300 hover:text-cyan-200 transition-colors duration-300"
+                    >
+                      Forgot password? 🤔
+                    </Link>
+                  </motion.div>
+                </div>
 
+                {/* Submit Button */}
+                <motion.button
+                  whileHover={{ scale: 1.05, boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.2)" }}
+                  whileTap={{ scale: 0.95 }}
+                  type="submit"
+                  disabled={loading}
+                  className="w-full bg-gradient-to-r from-cyan-500 to-purple-600 text-white font-bold py-4 px-6 rounded-xl shadow-lg hover:shadow-cyan-500/25 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed relative overflow-hidden group"
+                >
+                  <div className="absolute inset-0 bg-gradient-to-r from-pink-500 to-yellow-500 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                  <span className="relative z-10 flex items-center justify-center">
+                    {loading ? (
+                      <>
+                        <motion.div
+                          animate={{ rotate: 360 }}
+                          transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                          className="mr-3"
+                        >
+                          🌟
+                        </motion.div>
+                        Signing you in...
+                      </>
+                    ) : (
+                      <>
+                        <FiZap className="mr-2" />
+                        Launch into EduSync! 🚀
+                      </>
+                    )}
+                  </span>
+                </motion.button>
+              </form>
+            )}
                 {/* Submit Button */}
                 <motion.button
                   whileHover={{ scale: 1.05, boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.2)" }}

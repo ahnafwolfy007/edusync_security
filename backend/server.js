@@ -38,6 +38,8 @@ const businessMarketplaceRoutes = require('./routes/businessMarketplaceRoutes');
 const chatRoutes = require('./routes/chatRoutes');
 const { startScheduler } = require('./services/noticeScraper');
 
+const { idempotencyGuard, perUserLimiter } = require('./middlewares/concurrencyGuard');
+
 const app = express();
 const PORT = process.env.PORT || 5000;
 
@@ -80,6 +82,9 @@ app.use(compression());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(cookieParser());
+
+app.use(idempotencyGuard);                    // needs parsed body
+app.use(perUserLimiter);   
 
 // Logging middleware
 if (process.env.NODE_ENV === 'development') {
